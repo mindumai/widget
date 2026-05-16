@@ -104,9 +104,44 @@ export type BroadcastToken =
   | { type: 'tool_use_input_delta'; index: number; partial_json: string }
   | { type: 'message_stop' };
 
+/** A single deferred tool_use waiting for user approval. */
+export interface PendingToolUse {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+/**
+ * Payload of a `.widget.confirmation` broadcast — see
+ * WidgetConfirmationBroadcast.php on the API side. Fired when Claude
+ * wants to call a confirmation-gated tool (FR-056); the widget renders
+ * a card, user clicks Approve/Reject, widget POSTs /api/widget/confirm.
+ */
+export interface BroadcastConfirmation {
+  id: number;
+  conversation_id: number;
+  role: 'confirmation';
+  content: Array<{
+    type: 'confirmation_request';
+    assistant_message_id: number;
+    tool_uses: PendingToolUse[];
+    status: 'pending' | 'decided';
+    decision?: 'approve' | 'reject';
+  }>;
+  created_at: string | null;
+}
+
+/** Per-card state machine the widget tracks while waiting on /api/widget/confirm. */
+export type ConfirmationCardState =
+  | 'pending'
+  | 'approving'
+  | 'rejecting'
+  | 'approved'
+  | 'rejected';
+
 /** What we keep in memory per chat session for rendering. */
 export interface UiMessage {
-  role: 'user' | 'assistant' | 'error';
+  role: 'user' | 'assistant' | 'error' | 'confirmation';
   text: string;
   /** When the source was the WS broadcast, we hold the message id for de-dup against the HTTP fallback. */
   messageId?: number;
@@ -114,6 +149,13 @@ export interface UiMessage {
   markdown?: boolean;
   /** When tokens are still streaming in (2D). Suppresses markdown render + shows a caret in the bubble. */
   streaming?: boolean;
+  /** Confirmation-card payload; only present when role === 'confirmation'. */
+  confirmation?: {
+    messageId: number;
+    conversationId: number;
+    toolUses: PendingToolUse[];
+    state: ConfirmationCardState;
+  };
 }
 
 declare global {

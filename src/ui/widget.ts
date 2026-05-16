@@ -1,11 +1,10 @@
-import type { UiMessage, WidgetConfig } from '../types';
+import type { PendingToolUse, UiMessage, WidgetConfig } from '../types';
 import { renderMarkdown } from './markdown';
 import { buildStyles } from './styles';
 
 /**
  * Vanilla DOM widget. No framework — each method updates the bits of the
- * DOM it owns. Small enough that this is fine; we'll revisit if/when
- * confirmation cards + streaming arrive in 2D/2E.
+ * DOM it owns. Small enough that this is fine.
  */
 export class WidgetUi {
   private root: HTMLDivElement;
@@ -23,6 +22,8 @@ export class WidgetUi {
   private onClearConversation: () => void = () => {};
 
   private onFirstOpen: () => void = () => {};
+
+  private onConfirmDecision: (messageId: number, decision: 'approve' | 'reject') => void = () => {};
 
   private firstOpenFired = false;
 
@@ -53,9 +54,18 @@ export class WidgetUi {
     this.onClearConversation = handler;
   }
 
+  /** Fires when the user clicks Approve or Reject on a confirmation card. */
+  onConfirm(handler: (messageId: number, decision: 'approve' | 'reject') => void): void {
+    this.onConfirmDecision = handler;
+  }
+
   renderMessages(messages: UiMessage[]): void {
     this.messagesEl.innerHTML = '';
     for (const m of messages) {
+      if (m.role === 'confirmation' && m.confirmation) {
+        this.messagesEl.appendChild(this.buildConfirmationCard(m));
+        continue;
+      }
       const wrapper = document.createElement('div');
       wrapper.className = 'mindum-widget-message';
       wrapper.dataset.role = m.role;
@@ -80,6 +90,82 @@ export class WidgetUi {
     }
     // Scroll to bottom so the latest message is visible.
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+  }
+
+  /**
+   * Render a confirmation card for one or more deferred tool_use blocks.
+   * Card states drive the button enabled state and the trailing badge:
+   *   - pending: both buttons active
+   *   - approving / rejecting: both buttons disabled, label shows "Working…"
+   *   - approved / rejected: buttons removed, decided badge shown
+   */
+  private buildConfirmationCard(m: UiMessage): HTMLDivElement {
+    const c = m.confirmation!;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mindum-widget-confirmation';
+    wrapper.dataset.state = c.state;
+
+    const title = document.createElement('div');
+    title.className = 'mindum-widget-confirm-title';
+    title.textContent = c.toolUses.length === 1 ? 'Confirm action' : `Confirm ${c.toolUses.length} actions`;
+    wrapper.appendChild(title);
+
+    const list = document.createElement('ul');
+    list.className = 'mindum-widget-confirm-list';
+    for (const tu of c.toolUses) {
+      list.appendChild(this.buildToolUseRow(tu));
+    }
+    wrapper.appendChild(list);
+
+    if (c.state === 'pending' || c.state === 'approving' || c.state === 'rejecting') {
+      const actions = document.createElement('div');
+      actions.className = 'mindum-widget-confirm-actions';
+
+      const rejectBtn = document.createElement('button');
+      rejectBtn.type = 'button';
+      rejectBtn.className = 'mindum-widget-confirm-reject';
+      rejectBtn.textContent = c.state === 'rejecting' ? 'Working…' : 'Reject';
+      rejectBtn.disabled = c.state !== 'pending';
+      rejectBtn.addEventListener('click', () => this.onConfirmDecision(c.messageId, 'reject'));
+
+      const approveBtn = document.createElement('button');
+      approveBtn.type = 'button';
+      approveBtn.className = 'mindum-widget-confirm-approve';
+      approveBtn.textContent = c.state === 'approving' ? 'Working…' : 'Approve';
+      approveBtn.disabled = c.state !== 'pending';
+      approveBtn.addEventListener('click', () => this.onConfirmDecision(c.messageId, 'approve'));
+
+      actions.appendChild(rejectBtn);
+      actions.appendChild(approveBtn);
+      wrapper.appendChild(actions);
+    } else {
+      const badge = document.createElement('div');
+      badge.className = 'mindum-widget-confirm-badge';
+      badge.dataset.decision = c.state;
+      badge.textContent = c.state === 'approved' ? 'Approved' : 'Rejected';
+      wrapper.appendChild(badge);
+    }
+
+    return wrapper;
+  }
+
+  private buildToolUseRow(tu: PendingToolUse): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'mindum-widget-confirm-row';
+
+    const name = document.createElement('span');
+    name.className = 'mindum-widget-confirm-name';
+    name.textContent = humanizeToolName(tu.name);
+    li.appendChild(name);
+
+    const summary = formatArgumentsSummary(tu.input);
+    if (summary !== '') {
+      const args = document.createElement('span');
+      args.className = 'mindum-widget-confirm-args';
+      args.textContent = summary;
+      li.appendChild(args);
+    }
+    return li;
   }
 
   setLoading(loading: boolean): void {
@@ -159,4 +245,42 @@ export class WidgetUi {
     style.textContent = buildStyles(this.config.theme.primary ?? '#0F172A');
     document.head.appendChild(style);
   }
+}
+
+/**
+ * Turn `create_task` into "Create task", `delete_user` into "Delete user".
+ * Keeps the card label readable without the customer needing to provide
+ * humanized labels on the SDK side.
+ */
+function humanizeToolName(name: string): string {
+  if (!name) return 'Action';
+  const words = name.split('_').filter((w) => w.length > 0);
+  if (words.length === 0) return name;
+  return words.map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase())).join(' ');
+}
+
+/**
+ * Compact one-line summary of tool arguments for the card. We don't try
+ * to be clever — just show key=value pairs separated by commas, truncated
+ * to keep cards single-line on small screens. Boolean/null/number render
+ * as-is; strings get quoted; objects/arrays collapse to "(complex)".
+ */
+function formatArgumentsSummary(input: Record<string, unknown>): string {
+  const keys = Object.keys(input);
+  if (keys.length === 0) return '';
+  const pairs: string[] = [];
+  for (const k of keys) {
+    pairs.push(`${k}: ${formatArgValue(input[k])}`);
+    if (pairs.join(', ').length > 80) break;
+  }
+  let out = pairs.join(', ');
+  if (out.length > 90) out = `${out.slice(0, 87)}…`;
+  return out;
+}
+
+function formatArgValue(v: unknown): string {
+  if (v === null) return 'null';
+  if (typeof v === 'string') return v.length > 40 ? `"${v.slice(0, 37)}…"` : `"${v}"`;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  return '(complex)';
 }

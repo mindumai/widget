@@ -168,6 +168,87 @@ export function buildStyles(primary: string): string {
   50% { opacity: 0; }
 }
 
+.mindum-widget-confirmation {
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #fcd34d;
+  border-left: 4px solid #f59e0b;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #0f172a;
+}
+.mindum-widget-confirm-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #92400e;
+}
+.mindum-widget-confirm-list {
+  margin: 0 0 10px 0;
+  padding: 0;
+  list-style: none;
+}
+.mindum-widget-confirm-row {
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mindum-widget-confirm-name {
+  font-weight: 500;
+}
+.mindum-widget-confirm-args {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: #475569;
+  word-break: break-all;
+}
+.mindum-widget-confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.mindum-widget-confirm-approve,
+.mindum-widget-confirm-reject {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.mindum-widget-confirm-approve {
+  background: ${primary};
+  color: #fff;
+}
+.mindum-widget-confirm-reject {
+  background: #fff;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+.mindum-widget-confirm-approve:hover:not(:disabled),
+.mindum-widget-confirm-reject:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+.mindum-widget-confirm-approve:disabled,
+.mindum-widget-confirm-reject:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.mindum-widget-confirm-badge {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+}
+.mindum-widget-confirm-badge[data-decision="approved"] { color: #047857; }
+.mindum-widget-confirm-badge[data-decision="rejected"] { color: #64748b; }
+.mindum-widget-confirmation[data-state="approved"],
+.mindum-widget-confirmation[data-state="rejected"] {
+  opacity: 0.7;
+  border-left-color: #cbd5e1;
+  border-color: #e2e8f0;
+}
+
 .mindum-widget-form {
   display: flex;
   padding: 12px;

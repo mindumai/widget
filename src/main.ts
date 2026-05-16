@@ -1,7 +1,9 @@
 import { postChat, ChatError } from './api/chat';
+import { ConfirmError, postConfirm } from './api/confirm';
 import { createEchoClient, type EchoClient } from './api/echo';
 import { clearTokenCache, getToken, TokenMintError } from './api/token';
 import type {
+  BroadcastConfirmation,
   BroadcastMessage,
   BroadcastToken,
   ContentBlock,
@@ -39,6 +41,9 @@ function bootstrap(): void {
   const ui = new WidgetUi(config);
   const messages: UiMessage[] = [];
   const renderedMessageIds = new Set<number>();
+  // Confirmation card message_ids we've already pushed. The same card
+  // can arrive twice (broadcast + late HTTP fallback) so we dedupe.
+  const renderedConfirmationIds = new Set<number>();
   let echo: EchoClient | null = null;
   let teardownSubscribe: (() => void) | null = null;
   let pendingAssistantResolve: (() => void) | null = null;
@@ -56,7 +61,7 @@ function bootstrap(): void {
         endUserId: config.endUserId,
       });
       echo = createEchoClient({ apiUrl: config.apiUrl, minted: tok });
-      teardownSubscribe = echo.subscribe(config.sessionId, applyBroadcast, applyToken);
+      teardownSubscribe = echo.subscribe(config.sessionId, applyBroadcast, applyToken, applyConfirmation);
     } catch (err) {
       // WS unavailable from the start — log to console; we'll fall back to
       // HTTP rendering at send time. The user sees no error yet because
@@ -73,6 +78,7 @@ function bootstrap(): void {
     sessionStorage.setItem('mindum.sessionId', fresh);
     messages.length = 0;
     renderedMessageIds.clear();
+    renderedConfirmationIds.clear();
     streamingMessage = null;
     clearTokenCache();
     if (teardownSubscribe) {
@@ -113,7 +119,7 @@ function bootstrap(): void {
       if (!echo) {
         try {
           echo = createEchoClient({ apiUrl: config.apiUrl, minted: tok });
-          teardownSubscribe = echo.subscribe(config.sessionId, applyBroadcast, applyToken);
+          teardownSubscribe = echo.subscribe(config.sessionId, applyBroadcast, applyToken, applyConfirmation);
         } catch {
           // Subscribe failure is non-fatal — HTTP fallback takes over.
         }
@@ -130,6 +136,17 @@ function bootstrap(): void {
         messages.push({ role: 'error', text: humanizeServerError(reply.error) });
         ui.renderMessages(messages);
         ui.setLoading(false);
+        return;
+      }
+
+      // If the turn paused for confirmation, there's no assistant text
+      // to wait for — the confirmation card will arrive over the WS (or
+      // is already in the broadcast queue). Drop the typing indicator
+      // immediately and let applyConfirmation handle the render.
+      if (reply.stop_reason === 'awaiting_confirmation') {
+        streamingMessage = null;
+        ui.setLoading(false);
+        pendingAssistantResolve = null;
         return;
       }
 
@@ -196,6 +213,93 @@ function bootstrap(): void {
     ui.renderMessages(messages);
     pendingAssistantResolve?.();
   }
+
+  /**
+   * Apply a `widget.confirmation` broadcast. Pushes a card UiMessage
+   * into the list and re-renders. Dedupes by message_id so a late
+   * broadcast after a fallback render doesn't double-card.
+   */
+  function applyConfirmation(payload: BroadcastConfirmation): void {
+    if (renderedConfirmationIds.has(payload.id)) return;
+    renderedConfirmationIds.add(payload.id);
+
+    const block = payload.content[0];
+    if (!block || block.type !== 'confirmation_request') return;
+
+    messages.push({
+      role: 'confirmation',
+      text: '',
+      messageId: payload.id,
+      confirmation: {
+        messageId: payload.id,
+        conversationId: payload.conversation_id,
+        toolUses: block.tool_uses,
+        state: 'pending',
+      },
+    });
+    // The HTTP /api/widget/chat call is already settled by the time the
+    // pause arrives — but applyConfirmation can also fire from the WS
+    // before the HTTP response lands. Drop the typing indicator either
+    // way; the card is the visible signal that the agent is waiting.
+    ui.setLoading(false);
+    pendingAssistantResolve?.();
+    ui.renderMessages(messages);
+  }
+
+  ui.onConfirm(async (messageId, decision) => {
+    const target = messages.find(
+      (m) => m.role === 'confirmation' && m.confirmation?.messageId === messageId,
+    );
+    if (!target || !target.confirmation) return;
+    if (target.confirmation.state !== 'pending') return;
+
+    target.confirmation.state = decision === 'approve' ? 'approving' : 'rejecting';
+    ui.renderMessages(messages);
+    ui.setLoading(true);
+
+    const assistantArrival = new Promise<void>((resolve) => {
+      pendingAssistantResolve = resolve;
+    });
+
+    try {
+      const tok = await getToken({
+        tokenEndpoint: config.tokenEndpoint,
+        sessionId: config.sessionId,
+        endUserId: config.endUserId,
+      });
+      await postConfirm({
+        apiUrl: config.apiUrl,
+        token: tok.token,
+        conversationId: target.confirmation.conversationId,
+        decision,
+      });
+      target.confirmation.state = decision === 'approve' ? 'approved' : 'rejected';
+      ui.renderMessages(messages);
+
+      // After approve/reject, Claude responds — wait for the first token
+      // or the persisted message, falling back to leaving the indicator
+      // off if neither arrives in time. The race + fallback shape mirrors
+      // the chat-submit path.
+      const result = await Promise.race([
+        assistantArrival.then(() => 'broadcast' as const),
+        delay(750).then(() => 'fallback' as const),
+      ]);
+      if (result === 'fallback') {
+        // No broadcast came — typing indicator off; the user sees the
+        // decided card without an assistant reply. Rare; mostly happens
+        // when Reverb is down. The next chat message will work fine.
+        ui.setLoading(false);
+      }
+    } catch (err) {
+      target.confirmation.state = 'pending';
+      ui.renderMessages(messages);
+      messages.push({ role: 'error', text: humanizeConfirmError(err) });
+      ui.renderMessages(messages);
+    } finally {
+      ui.setLoading(false);
+      pendingAssistantResolve = null;
+    }
+  });
 
   /**
    * Apply a `widget.token` streaming delta. We only render text_delta
@@ -269,6 +373,18 @@ function humanizeClientError(err: unknown): string {
 function humanizeServerError(code: string): string {
   if (code.startsWith('mcp_')) return "We're having trouble reaching the customer integration.";
   return 'Something went wrong on our end.';
+}
+
+function humanizeConfirmError(err: unknown): string {
+  if (err instanceof ConfirmError) {
+    if (err.status === 401) return 'Your chat session expired. Please retry to refresh it.';
+    if (err.status === 404) return 'That action is no longer available — try sending a new message.';
+    return `Could not complete the action (${err.status}). Please retry.`;
+  }
+  if (err instanceof TokenMintError) {
+    return "We can't reach the chat service right now. Please try again in a moment.";
+  }
+  return 'Something went wrong. Please retry.';
 }
 
 if (document.readyState === 'loading') {
