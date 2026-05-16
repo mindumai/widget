@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mindum Widget Dev</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 720px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #0f172a;
+      }
+      pre {
+        background: #f1f5f9;
+        padding: 1rem;
+        border-radius: 8px;
+        overflow-x: auto;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Mindum Widget — dev page</h1>
+    <p>
+      Loads <code>src/main.ts</code> directly via Vite. The widget reads
+      <code>window.__MINDUM_WIDGET__</code> on bootstrap, so the bootstrap
+      config below is what a customer's SDK Blade component would emit.
+    </p>
+    <pre id="config-preview"></pre>
+
+    <script>
+      // Bootstrap config — this is what <x-mindum::widget /> emits in a real install.
+      // Points at the local API + demo-app for development.
+      window.__MINDUM_WIDGET__ = {
+        sessionId: 'dev-' + Math.random().toString(36).slice(2, 10),
+        endUserId: null,
+        // Where the widget mints its JWT (same-origin SDK proxy in real installs).
+        // In this dev page we don't have a Laravel proxy; the widget will use the
+        // override hook in dev mode (see src/api/token.ts).
+        tokenEndpoint: '/mindum/widget/token',
+        // Orchestrator API (local API server during dev).
+        apiUrl: 'http://127.0.0.1:8001',
+        wsUrl: 'ws://127.0.0.1:8080',
+        theme: { primary: '#0F172A' },
+        position: 'bottom-right',
+      };
+      document.getElementById('config-preview').textContent =
+        JSON.stringify(window.__MINDUM_WIDGET__, null, 2);
+    </script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
