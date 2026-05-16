@@ -71,10 +71,19 @@ async function mint(opts: {
   }
 
   const payload = (await res.json()) as Partial<MintedToken>;
-  if (typeof payload.token !== 'string' || typeof payload.expires_at !== 'number') {
-    throw new TokenMintError('Mint endpoint response missing token or expires_at.', res.status);
+  if (
+    typeof payload.token !== 'string' ||
+    typeof payload.expires_at !== 'number' ||
+    !payload.ws ||
+    typeof payload.ws.key !== 'string'
+  ) {
+    throw new TokenMintError('Mint endpoint response missing token / expires_at / ws fields.', res.status);
   }
-  return { token: payload.token, expires_at: payload.expires_at };
+  return {
+    token: payload.token,
+    expires_at: payload.expires_at,
+    ws: payload.ws,
+  };
 }
 
 export class TokenMintError extends Error {

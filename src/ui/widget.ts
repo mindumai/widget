@@ -1,4 +1,5 @@
 import type { UiMessage, WidgetConfig } from '../types';
+import { renderMarkdown } from './markdown';
 import { buildStyles } from './styles';
 
 /**
@@ -19,6 +20,12 @@ export class WidgetUi {
 
   private onSend: (text: string) => void = () => {};
 
+  private onClearConversation: () => void = () => {};
+
+  private onFirstOpen: () => void = () => {};
+
+  private firstOpenFired = false;
+
   constructor(private readonly config: WidgetConfig) {
     this.injectStyles();
     this.root = this.buildRoot();
@@ -36,6 +43,16 @@ export class WidgetUi {
     this.onSend = handler;
   }
 
+  /** Fires once, the first time the panel opens. Used to open the WS subscribe lazily. */
+  onPanelFirstOpen(handler: () => void): void {
+    this.onFirstOpen = handler;
+  }
+
+  /** Fires when the user clicks the "clear conversation" button. */
+  onClear(handler: () => void): void {
+    this.onClearConversation = handler;
+  }
+
   renderMessages(messages: UiMessage[]): void {
     this.messagesEl.innerHTML = '';
     for (const m of messages) {
@@ -44,7 +61,14 @@ export class WidgetUi {
       wrapper.dataset.role = m.role;
       const bubble = document.createElement('div');
       bubble.className = 'mindum-widget-bubble-msg';
-      bubble.textContent = m.text;
+      if (m.markdown && m.role === 'assistant') {
+        // Sanitized via DOMPurify in renderMarkdown — safe to set innerHTML.
+        // User messages always go through textContent in the else branch,
+        // so a user can't inject markup by typing it.
+        bubble.innerHTML = renderMarkdown(m.text);
+      } else {
+        bubble.textContent = m.text;
+      }
       wrapper.appendChild(bubble);
       this.messagesEl.appendChild(wrapper);
     }
@@ -63,9 +87,16 @@ export class WidgetUi {
     this.root.querySelector<HTMLButtonElement>('.mindum-widget-bubble')!.addEventListener('click', () => {
       this.root.classList.add('is-open');
       this.input.focus();
+      if (!this.firstOpenFired) {
+        this.firstOpenFired = true;
+        this.onFirstOpen();
+      }
     });
     this.root.querySelector<HTMLButtonElement>('.mindum-widget-close')!.addEventListener('click', () => {
       this.root.classList.remove('is-open');
+    });
+    this.root.querySelector<HTMLButtonElement>('.mindum-widget-clear')!.addEventListener('click', () => {
+      this.onClearConversation();
     });
     this.form.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -84,7 +115,16 @@ export class WidgetUi {
       <div class="mindum-widget-panel" role="dialog" aria-label="Mindum chat">
         <div class="mindum-widget-header">
           <span>Chat</span>
-          <button type="button" class="mindum-widget-close" aria-label="Close">&times;</button>
+          <div class="mindum-widget-header-actions">
+            <button type="button" class="mindum-widget-clear" aria-label="Clear conversation" title="Clear conversation">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                <path d="M3 6h18"></path>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+            <button type="button" class="mindum-widget-close" aria-label="Close">&times;</button>
+          </div>
         </div>
         <div class="mindum-widget-messages"></div>
         <div class="mindum-widget-typing">Thinking…</div>

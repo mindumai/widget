@@ -56,11 +56,21 @@ export function buildStyles(primary: string): string {
   display: flex; justify-content: space-between; align-items: center;
   font-weight: 600;
 }
-.mindum-widget-close {
-  background: none; border: none; color: #fff; cursor: pointer;
-  font-size: 22px; line-height: 1; padding: 0 4px;
+.mindum-widget-header-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
-.mindum-widget-close:hover { opacity: 0.8; }
+.mindum-widget-close,
+.mindum-widget-clear {
+  background: none; border: none; color: #fff; cursor: pointer;
+  padding: 4px 6px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+}
+.mindum-widget-close { font-size: 22px; line-height: 1; }
+.mindum-widget-close:hover,
+.mindum-widget-clear:hover { opacity: 0.8; background: rgba(255,255,255,0.12); }
 
 .mindum-widget-messages {
   flex: 1;
@@ -83,6 +93,31 @@ export function buildStyles(primary: string): string {
   font-size: 14px;
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+.mindum-widget-bubble-msg > *:first-child { margin-top: 0; }
+.mindum-widget-bubble-msg > *:last-child { margin-bottom: 0; }
+.mindum-widget-bubble-msg p { margin: 0.4em 0; }
+.mindum-widget-bubble-msg ul, .mindum-widget-bubble-msg ol { margin: 0.4em 0; padding-left: 1.5em; }
+.mindum-widget-bubble-msg li { margin: 0.2em 0; }
+.mindum-widget-bubble-msg code {
+  background: rgba(15,23,42,0.07);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+.mindum-widget-bubble-msg pre {
+  background: rgba(15,23,42,0.07);
+  padding: 8px 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+.mindum-widget-bubble-msg pre code { background: transparent; padding: 0; }
+.mindum-widget-bubble-msg a { color: inherit; text-decoration: underline; }
+.mindum-widget-message[data-role="user"] .mindum-widget-bubble-msg code,
+.mindum-widget-message[data-role="user"] .mindum-widget-bubble-msg pre {
+  background: rgba(255,255,255,0.18);
 }
 .mindum-widget-message[data-role="user"] .mindum-widget-bubble-msg {
   background: ${primary};

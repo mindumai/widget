@@ -14,7 +14,7 @@ export interface WidgetConfig {
   tokenEndpoint: string;
   /** Orchestrator API base URL — chat POSTs go here. */
   apiUrl: string;
-  /** Reverb WS URL — 2C.2 uses for real-time subscribe; 2C.1 ignores. */
+  /** Reverb WS URL — kept for back-compat / display, but the actual connection details come back in the mint response since 2C.2. */
   wsUrl: string;
   /** Visual theme overrides. */
   theme: { primary?: string };
@@ -22,10 +22,23 @@ export interface WidgetConfig {
   position: 'bottom-right' | 'bottom-left';
 }
 
+/** Reverb client connection info — returned with every mint so the widget never has to be pre-configured with our Reverb keys. */
+export interface ReverbClientConfig {
+  /** Reverb app key (public, like a Pusher app key). */
+  key: string;
+  /** Hostname the browser connects to (e.g. 'localhost' in dev, 'mindum.online' in prod). */
+  host: string;
+  /** Port the browser connects to. */
+  port: number;
+  /** 'http' or 'https' — drives ws:// vs wss:// and Echo's forceTLS. */
+  scheme: string;
+}
+
 /** Token response from POST {tokenEndpoint}. */
 export interface MintedToken {
   token: string;
   expires_at: number;
+  ws: ReverbClientConfig;
 }
 
 /** A single text content block as Anthropic returns it. */
@@ -34,10 +47,25 @@ export interface TextBlock {
   text: string;
 }
 
-/** Other content-block types pass through opaquely — 2C.1 only renders text. */
-export type ContentBlock = TextBlock | { type: string; [k: string]: unknown };
+/** Tool-use block — what Claude emits when it wants to call a tool. */
+export interface ToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
 
-/** Response shape from POST {apiUrl}/api/widget/chat. */
+/** Tool-result block — what we feed back to Claude after running a tool. */
+export interface ToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: unknown;
+  is_error?: boolean;
+}
+
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | { type: string; [k: string]: unknown };
+
+/** Response shape from POST {apiUrl}/api/widget/chat (still useful as a fallback when WS is down). */
 export interface ChatTurnResponse {
   conversation_id: number;
   response: string;
@@ -49,10 +77,27 @@ export interface ChatTurnResponse {
   error: string | null;
 }
 
-/** What we keep in memory per chat session. */
+/**
+ * Payload of a `.widget.message` broadcast event. Mirrors the Anthropic
+ * Message row on the server — the widget renders straight from this and
+ * never re-fetches the message body via HTTP.
+ */
+export interface BroadcastMessage {
+  id: number;
+  role: 'user' | 'assistant';
+  content: ContentBlock[];
+  stop_reason: string | null;
+  created_at: string | null;
+}
+
+/** What we keep in memory per chat session for rendering. */
 export interface UiMessage {
   role: 'user' | 'assistant' | 'error';
   text: string;
+  /** When the source was the WS broadcast, we hold the message id for de-dup against the HTTP fallback. */
+  messageId?: number;
+  /** Whether `text` should be rendered as markdown (true for assistant role). */
+  markdown?: boolean;
 }
 
 declare global {
