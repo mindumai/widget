@@ -3,6 +3,7 @@ import { createEchoClient, type EchoClient } from './api/echo';
 import { clearTokenCache, getToken, TokenMintError } from './api/token';
 import type {
   BroadcastMessage,
+  BroadcastToken,
   ContentBlock,
   TextBlock,
   UiMessage,
@@ -41,6 +42,10 @@ function bootstrap(): void {
   let echo: EchoClient | null = null;
   let teardownSubscribe: (() => void) | null = null;
   let pendingAssistantResolve: (() => void) | null = null;
+  // The in-flight streaming assistant bubble (one at a time). When tokens
+  // arrive we append into this; when the corresponding widget.message lands
+  // we finalize it (clear flag, apply markdown).
+  let streamingMessage: UiMessage | null = null;
 
   // Open the WS the first time the user actually opens the panel.
   ui.onPanelFirstOpen(async () => {
@@ -51,9 +56,7 @@ function bootstrap(): void {
         endUserId: config.endUserId,
       });
       echo = createEchoClient({ apiUrl: config.apiUrl, minted: tok });
-      teardownSubscribe = echo.subscribe(config.sessionId, (msg) => {
-        applyBroadcast(msg);
-      });
+      teardownSubscribe = echo.subscribe(config.sessionId, applyBroadcast, applyToken);
     } catch (err) {
       // WS unavailable from the start — log to console; we'll fall back to
       // HTTP rendering at send time. The user sees no error yet because
@@ -70,6 +73,7 @@ function bootstrap(): void {
     sessionStorage.setItem('mindum.sessionId', fresh);
     messages.length = 0;
     renderedMessageIds.clear();
+    streamingMessage = null;
     clearTokenCache();
     if (teardownSubscribe) {
       teardownSubscribe();
@@ -84,11 +88,14 @@ function bootstrap(): void {
 
   ui.onSubmit(async (text) => {
     messages.push({ role: 'user', text });
+    streamingMessage = null;
     ui.renderMessages(messages);
     ui.setLoading(true);
 
     // Set up a deadline: if no assistant broadcast arrives within
     // FALLBACK_MS of the POST returning, render from the HTTP response.
+    // With 2D streaming, the FIRST text_delta already counts as the
+    // assistant arriving (we resolve the promise from applyToken).
     const FALLBACK_MS = 750;
     const assistantArrival = new Promise<void>((resolve) => {
       pendingAssistantResolve = resolve;
@@ -106,7 +113,7 @@ function bootstrap(): void {
       if (!echo) {
         try {
           echo = createEchoClient({ apiUrl: config.apiUrl, minted: tok });
-          teardownSubscribe = echo.subscribe(config.sessionId, applyBroadcast);
+          teardownSubscribe = echo.subscribe(config.sessionId, applyBroadcast, applyToken);
         } catch {
           // Subscribe failure is non-fatal — HTTP fallback takes over.
         }
@@ -119,26 +126,29 @@ function bootstrap(): void {
       });
 
       if (reply.error) {
+        streamingMessage = null;
         messages.push({ role: 'error', text: humanizeServerError(reply.error) });
         ui.renderMessages(messages);
         ui.setLoading(false);
         return;
       }
 
-      // Race the WS broadcast against the fallback timer. If the broadcast
-      // wins, applyBroadcast already pushed the assistant message and
-      // resolved the promise. If the timer wins, fall back to the HTTP
-      // response body so the user is never stuck on "Thinking…".
+      // Race the WS broadcast against the fallback timer. If broadcasts
+      // arrived (token deltas or the final message), pendingAssistantResolve
+      // has already fired. If the timer wins, fall back to the HTTP
+      // response body so the user is never stuck on the typing indicator.
       const result = await Promise.race([
         assistantArrival.then(() => 'broadcast' as const),
         delay(FALLBACK_MS).then(() => 'fallback' as const),
       ]);
 
       if (result === 'fallback' && !echo?.isConnected()) {
+        streamingMessage = null;
         messages.push({ role: 'assistant', text: reply.response, markdown: true });
         ui.renderMessages(messages);
       }
     } catch (err) {
+      streamingMessage = null;
       messages.push({ role: 'error', text: humanizeClientError(err) });
       ui.renderMessages(messages);
     } finally {
@@ -148,9 +158,14 @@ function bootstrap(): void {
   });
 
   /**
-   * Apply an incoming `widget.message` broadcast. De-dupes by message id
-   * so an HTTP fallback that races with a late broadcast doesn't render
-   * the same assistant reply twice.
+   * Apply an incoming `widget.message` broadcast (persisted Message row).
+   * Two behaviors depending on whether streaming was in flight:
+   *  - If we have an open streamingMessage with the matching role, finalize
+   *    it: drop the streaming flag, re-render so markdown applies. The
+   *    text we accumulated from deltas should already equal extractText(msg.content).
+   *  - Otherwise (e.g. user-role broadcast, or assistant arrived without
+   *    any deltas — non-streaming fallback path), push a fresh message
+   *    if needed and dedupe by id.
    */
   function applyBroadcast(msg: BroadcastMessage): void {
     if (renderedMessageIds.has(msg.id)) return;
@@ -160,12 +175,52 @@ function bootstrap(): void {
     // already pushed an optimistic local user bubble at submit time.
     if (msg.role === 'user') return;
 
+    if (streamingMessage) {
+      // Finalize the in-flight bubble. Replace text with the persisted
+      // version (handles edge cases where deltas dropped a token), drop
+      // the streaming flag so markdown renders, lock in the id for dedup.
+      streamingMessage.text = extractText(msg.content) || streamingMessage.text;
+      streamingMessage.streaming = false;
+      streamingMessage.messageId = msg.id;
+      streamingMessage = null;
+      ui.renderMessages(messages);
+      pendingAssistantResolve?.();
+
+      return;
+    }
+
     const text = extractText(msg.content);
     if (text === '') return;
 
     messages.push({ role: 'assistant', text, markdown: true, messageId: msg.id });
     ui.renderMessages(messages);
     pendingAssistantResolve?.();
+  }
+
+  /**
+   * Apply a `widget.token` streaming delta. We only render text_delta
+   * events in 2D; tool_use_* events are forwarded but currently ignored
+   * (FR-057 tool-progress indicators are a future polish).
+   */
+  function applyToken(event: BroadcastToken): void {
+    if (event.type !== 'text_delta') return;
+
+    if (!streamingMessage) {
+      streamingMessage = {
+        role: 'assistant',
+        text: event.text,
+        markdown: true,
+        streaming: true,
+      };
+      messages.push(streamingMessage);
+      // First token = assistant has arrived. Hide the typing indicator,
+      // resolve the race so the fallback timer stops competing.
+      ui.setLoading(false);
+      pendingAssistantResolve?.();
+    } else {
+      streamingMessage.text += event.text;
+    }
+    ui.renderMessages(messages);
   }
 }
 

@@ -90,6 +90,20 @@ export interface BroadcastMessage {
   created_at: string | null;
 }
 
+/**
+ * Payload of a `.widget.token` broadcast event. Per-token streaming
+ * deltas while Claude is mid-response. The widget uses these to render
+ * the assistant bubble progressively, then finalizes via the subsequent
+ * `widget.message` broadcast (which carries the persisted Message row).
+ *
+ * Shapes match AnthropicChatClient::simplifyForCaller() on the API side.
+ */
+export type BroadcastToken =
+  | { type: 'text_delta'; index: number; text: string }
+  | { type: 'tool_use_start'; index: number; id: string; name: string }
+  | { type: 'tool_use_input_delta'; index: number; partial_json: string }
+  | { type: 'message_stop' };
+
 /** What we keep in memory per chat session for rendering. */
 export interface UiMessage {
   role: 'user' | 'assistant' | 'error';
@@ -98,6 +112,8 @@ export interface UiMessage {
   messageId?: number;
   /** Whether `text` should be rendered as markdown (true for assistant role). */
   markdown?: boolean;
+  /** When tokens are still streaming in (2D). Suppresses markdown render + shows a caret in the bubble. */
+  streaming?: boolean;
 }
 
 declare global {

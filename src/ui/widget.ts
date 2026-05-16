@@ -59,12 +59,18 @@ export class WidgetUi {
       const wrapper = document.createElement('div');
       wrapper.className = 'mindum-widget-message';
       wrapper.dataset.role = m.role;
+      if (m.streaming) {
+        wrapper.dataset.streaming = 'true';
+      }
       const bubble = document.createElement('div');
       bubble.className = 'mindum-widget-bubble-msg';
-      if (m.markdown && m.role === 'assistant') {
+      if (m.markdown && m.role === 'assistant' && !m.streaming) {
         // Sanitized via DOMPurify in renderMarkdown — safe to set innerHTML.
         // User messages always go through textContent in the else branch,
         // so a user can't inject markup by typing it.
+        // Streaming partial text stays as plain text until the assistant
+        // bubble finalizes — partial markdown like "**foo" renders weirdly,
+        // and the cost of re-running marked on every delta isn't worth it.
         bubble.innerHTML = renderMarkdown(m.text);
       } else {
         bubble.textContent = m.text;
@@ -127,7 +133,11 @@ export class WidgetUi {
           </div>
         </div>
         <div class="mindum-widget-messages"></div>
-        <div class="mindum-widget-typing">Thinking…</div>
+        <div class="mindum-widget-typing" aria-label="Assistant is typing">
+          <span class="mindum-widget-typing-dot"></span>
+          <span class="mindum-widget-typing-dot"></span>
+          <span class="mindum-widget-typing-dot"></span>
+        </div>
         <form class="mindum-widget-form">
           <input type="text" class="mindum-widget-input" placeholder="Type a message…" autocomplete="off" />
           <button type="submit" class="mindum-widget-send">Send</button>

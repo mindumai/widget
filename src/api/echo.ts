@@ -1,6 +1,6 @@
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
-import type { BroadcastMessage, MintedToken } from '../types';
+import type { BroadcastMessage, BroadcastToken, MintedToken } from '../types';
 
 /**
  * Lazy Echo client. We don't open a WS connection until the panel
@@ -14,8 +14,17 @@ import type { BroadcastMessage, MintedToken } from '../types';
  * callback to deliver the auth response (or an error).
  */
 export interface EchoClient {
-  /** Subscribe to widget.{sessionId} and call onMessage on every broadcast. Returns a teardown function. */
-  subscribe(sessionId: string, onMessage: (msg: BroadcastMessage) => void): () => void;
+  /**
+   * Subscribe to widget.{sessionId}.
+   *   - onMessage fires for every `widget.message` broadcast (persisted Message row).
+   *   - onToken fires for every `widget.token` streaming delta from 2D.
+   * Returns a teardown function.
+   */
+  subscribe(
+    sessionId: string,
+    onMessage: (msg: BroadcastMessage) => void,
+    onToken?: (event: BroadcastToken) => void,
+  ): () => void;
   /** Tear down the WS connection. */
   disconnect(): void;
   /** True once the underlying Pusher/Reverb connection has fired `connected`. */
@@ -93,14 +102,20 @@ export function createEchoClient(opts: {
   });
 
   return {
-    subscribe(sessionId, onMessage) {
+    subscribe(sessionId, onMessage, onToken) {
       const channel = echo.private(`widget.${sessionId}`);
       // Note the leading dot: the orchestrator's broadcastAs() returns
-      // 'widget.message' — without the leading dot Echo would auto-prefix
-      // with the App\Events\... namespace and miss every event.
+      // 'widget.message' / 'widget.token' — without the leading dot Echo
+      // would auto-prefix with the App\Events\... namespace and miss
+      // every event.
       channel.listen('.widget.message', (payload: BroadcastMessage) => {
         onMessage(payload);
       });
+      if (onToken) {
+        channel.listen('.widget.token', (payload: BroadcastToken) => {
+          onToken(payload);
+        });
+      }
       return () => {
         echo.leave(`widget.${sessionId}`);
       };

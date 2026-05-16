@@ -139,11 +139,34 @@ export function buildStyles(primary: string): string {
 
 .mindum-widget-typing {
   display: none;
-  padding: 0 16px 8px;
-  color: #64748b;
-  font-size: 13px;
+  padding: 4px 16px 10px;
+  align-items: center;
+  gap: 4px;
 }
-.mindum-widget-root.is-loading .mindum-widget-typing { display: block; }
+.mindum-widget-root.is-loading .mindum-widget-typing { display: flex; }
+.mindum-widget-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #94a3b8;
+  animation: mindum-typing-pulse 1.4s infinite ease-in-out both;
+}
+.mindum-widget-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.mindum-widget-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes mindum-typing-pulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.85); }
+  40% { opacity: 1; transform: scale(1); }
+}
+.mindum-widget-message[data-streaming="true"] .mindum-widget-bubble-msg::after {
+  content: '▋';
+  display: inline-block;
+  margin-left: 2px;
+  animation: mindum-caret-blink 1s steps(2) infinite;
+  color: #94a3b8;
+}
+@keyframes mindum-caret-blink {
+  50% { opacity: 0; }
+}
 
 .mindum-widget-form {
   display: flex;
