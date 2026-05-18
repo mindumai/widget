@@ -406,6 +406,7 @@ function humanizeClientError(err: unknown): string {
 }
 
 function humanizeServerError(code: string): string {
+  if (code === 'rate_limited') return 'The chat service is busy right now. Please wait a moment and try again.';
   if (code.startsWith('mcp_')) return "We're having trouble reaching the customer integration.";
   return 'Something went wrong on our end.';
 }
