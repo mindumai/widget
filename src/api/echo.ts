@@ -53,7 +53,12 @@ export function createEchoClient(opts: {
     wsPort: ws.port,
     wssPort: ws.port,
     forceTLS,
-    enabledTransports: forceTLS ? ['wss'] : ['ws'],
+    // pusher-js's transport name is 'ws' regardless of TLS; `forceTLS`
+    // controls whether the underlying socket is wss:// or ws://. Setting
+    // ['wss'] leaves pusher-js with no valid transports and the connection
+    // goes 'initialized -> failed' immediately without a network attempt.
+    // Caught in production at Phase 2F deploy (local was 'ws' only).
+    enabledTransports: ['ws'],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     authorizer: (channel: any) => ({
       // Pusher's ChannelAuthorizationCallback is `(err, ChannelAuthorizationData | null) => void`.
