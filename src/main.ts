@@ -69,20 +69,44 @@ function bootstrap(): void {
 
   // Open the WS the first time the user actually opens the panel. Also
   // seed the welcome bubble + chips at the same moment.
+  //
+  // Phase 3C.4: the mint response carries the dashboard's theme + welcome
+  // overrides. Apply them BEFORE rendering the welcome so the message,
+  // prompts, and primary color match what the customer configured. Mint
+  // blocks override the SDK Blade defaults when set; null mint blocks
+  // fall through to the SDK config we populated in readConfig.
   ui.onPanelFirstOpen(async () => {
-    showWelcomeIfEmpty();
     try {
       const tok = await getToken({
         tokenEndpoint: config.tokenEndpoint,
         sessionId: config.sessionId,
         endUserId: config.endUserId,
       });
+
+      if (tok.theme) {
+        ui.updateTheme({
+          primary: tok.theme.primary,
+          position: tok.theme.position,
+        });
+      }
+      if (tok.welcome) {
+        if (typeof tok.welcome.message === 'string') {
+          config.welcome.message = tok.welcome.message;
+        }
+        if (Array.isArray(tok.welcome.prompts)) {
+          config.welcome.prompts = tok.welcome.prompts;
+        }
+      }
+
+      showWelcomeIfEmpty();
+
       echo = createEchoClient({ apiUrl: config.apiUrl, minted: tok });
       teardownSubscribe = echo.subscribe(config.sessionId, applyBroadcast, applyToken, applyConfirmation);
     } catch (err) {
-      // WS unavailable from the start — log to console; we'll fall back to
-      // HTTP rendering at send time. The user sees no error yet because
-      // there's nothing to react to until they send a message.
+      // WS / mint unavailable — fall back to SDK welcome and HTTP-only
+      // chat. The user sees no error yet because there's nothing to react
+      // to until they send a message.
+      showWelcomeIfEmpty();
       // eslint-disable-next-line no-console
       console.warn('[mindum] could not open WS subscribe; HTTP fallback engaged.', err);
     }

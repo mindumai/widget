@@ -31,6 +31,8 @@ export class WidgetUi {
 
   private promptsEl: HTMLDivElement | null = null;
 
+  private styleEl: HTMLStyleElement | null = null;
+
   constructor(private readonly config: WidgetConfig) {
     this.injectStyles();
     this.root = this.buildRoot();
@@ -281,12 +283,33 @@ export class WidgetUi {
     return root;
   }
 
+  /**
+   * Re-style the widget after construction (Phase 3C.4). Lets the bootstrap
+   * apply a dashboard-set primary color and/or position once the mint
+   * response lands, without re-rendering the whole tree.
+   */
+  updateTheme(theme: { primary?: string | null; position?: 'bottom-right' | 'bottom-left' | null }): void {
+    if (theme.primary && this.styleEl) {
+      this.config.theme = { ...this.config.theme, primary: theme.primary };
+      this.styleEl.textContent = buildStyles(theme.primary);
+    }
+    if (theme.position) {
+      this.config.position = theme.position;
+      this.root.dataset.position = theme.position;
+    }
+  }
+
   private injectStyles(): void {
-    if (document.getElementById('mindum-widget-styles')) return;
+    const existing = document.getElementById('mindum-widget-styles');
+    if (existing instanceof HTMLStyleElement) {
+      this.styleEl = existing;
+      return;
+    }
     const style = document.createElement('style');
     style.id = 'mindum-widget-styles';
     style.textContent = buildStyles(this.config.theme.primary ?? '#0F172A');
     document.head.appendChild(style);
+    this.styleEl = style;
   }
 }
 

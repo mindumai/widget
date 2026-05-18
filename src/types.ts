@@ -41,11 +41,40 @@ export interface ReverbClientConfig {
   scheme: string;
 }
 
+/**
+ * Per-account widget theme from the orchestrator's dashboard (Phase 3C.3).
+ * Null when the customer hasn't used the look-and-feel editor — the widget
+ * uses its built-in defaults. Individual keys may be null when unset.
+ */
+export interface MintedTheme {
+  primary: string | null;
+  position: 'bottom-right' | 'bottom-left' | null;
+  bg: string | null;
+  radius: number | null;
+  font: 'system' | 'serif' | 'mono' | null;
+  logo_url: string | null;
+  icon_url: string | null;
+}
+
+/**
+ * Per-account welcome from the orchestrator's dashboard (Phase 3C.2).
+ * Null when the customer hasn't used the welcome editor. Prompts is always
+ * an array (possibly empty) when the block is present.
+ */
+export interface MintedWelcome {
+  message: string | null;
+  prompts: string[];
+}
+
 /** Token response from POST {tokenEndpoint}. */
 export interface MintedToken {
   token: string;
   expires_at: number;
   ws: ReverbClientConfig;
+  /** Dashboard-set widget theme; null if the customer hasn't used the editor. */
+  theme: MintedTheme | null;
+  /** Dashboard-set welcome content; null if the customer hasn't used the editor. */
+  welcome: MintedWelcome | null;
 }
 
 /** A single text content block as Anthropic returns it. */

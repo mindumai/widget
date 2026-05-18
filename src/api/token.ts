@@ -83,6 +83,11 @@ async function mint(opts: {
     token: payload.token,
     expires_at: payload.expires_at,
     ws: payload.ws,
+    // theme + welcome are optional in the mint contract — null when the
+    // customer hasn't used the dashboard editors. Pass through as-is;
+    // the widget bootstrap applies precedence (SDK Blade attrs > mint > defaults).
+    theme: payload.theme ?? null,
+    welcome: payload.welcome ?? null,
   };
 }
 
