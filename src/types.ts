@@ -20,6 +20,13 @@ export interface WidgetConfig {
   theme: { primary?: string };
   /** Floating bubble placement. */
   position: 'bottom-right' | 'bottom-left';
+  /** First-open welcome content (FR-054). Synthetic — not persisted, not sent to Anthropic. */
+  welcome: {
+    /** Greeting message shown as the first assistant bubble when the panel opens with no history. Empty string disables. */
+    message: string;
+    /** Clickable starter prompts shown below the welcome message. Empty array = no chips. */
+    prompts: string[];
+  };
 }
 
 /** Reverb client connection info — returned with every mint so the widget never has to be pre-configured with our Reverb keys. */

@@ -168,6 +168,31 @@ export function buildStyles(primary: string): string {
   50% { opacity: 0; }
 }
 
+.mindum-widget-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 14px 0;
+}
+.mindum-widget-prompt-chip {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  line-height: 1.3;
+  text-align: left;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.mindum-widget-prompt-chip:hover {
+  background: ${primary};
+  border-color: ${primary};
+  color: #fff;
+}
+
 .mindum-widget-confirmation {
   margin-bottom: 10px;
   padding: 12px 14px;

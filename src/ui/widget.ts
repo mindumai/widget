@@ -25,7 +25,11 @@ export class WidgetUi {
 
   private onConfirmDecision: (messageId: number, decision: 'approve' | 'reject') => void = () => {};
 
+  private onPromptClick: (text: string) => void = () => {};
+
   private firstOpenFired = false;
+
+  private promptsEl: HTMLDivElement | null = null;
 
   constructor(private readonly config: WidgetConfig) {
     this.injectStyles();
@@ -57,6 +61,45 @@ export class WidgetUi {
   /** Fires when the user clicks Approve or Reject on a confirmation card. */
   onConfirm(handler: (messageId: number, decision: 'approve' | 'reject') => void): void {
     this.onConfirmDecision = handler;
+  }
+
+  /** Fires when the user clicks one of the welcome-screen suggested-prompt chips (FR-054). */
+  onSuggestedPrompt(handler: (text: string) => void): void {
+    this.onPromptClick = handler;
+  }
+
+  /**
+   * Render a row of clickable starter chips below the welcome bubble.
+   * Idempotent: replaces any existing chip row. Empty array hides them.
+   */
+  showSuggestedPrompts(prompts: string[]): void {
+    this.hideSuggestedPrompts();
+    if (prompts.length === 0) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'mindum-widget-prompts';
+    for (const p of prompts) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'mindum-widget-prompt-chip';
+      chip.textContent = p;
+      chip.addEventListener('click', () => {
+        // Capture the text now — once hideSuggestedPrompts runs the button
+        // is gone from the DOM but the click handler closure still holds it.
+        this.onPromptClick(p);
+      });
+      wrap.appendChild(chip);
+    }
+    this.messagesEl.appendChild(wrap);
+    this.promptsEl = wrap;
+    this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+  }
+
+  /** Remove the chip row if present. Called on any first submit. */
+  hideSuggestedPrompts(): void {
+    if (this.promptsEl) {
+      this.promptsEl.remove();
+      this.promptsEl = null;
+    }
   }
 
   renderMessages(messages: UiMessage[]): void {

@@ -52,8 +52,25 @@ function bootstrap(): void {
   // we finalize it (clear flag, apply markdown).
   let streamingMessage: UiMessage | null = null;
 
-  // Open the WS the first time the user actually opens the panel.
+  // Show the welcome + suggested-prompt chips if the conversation is empty.
+  // Synthetic only — not persisted, not sent to Anthropic. Hides once the
+  // user submits anything.
+  const showWelcomeIfEmpty = (): void => {
+    if (messages.length > 0) return;
+    const hasMessage = config.welcome.message.trim() !== '';
+    const hasPrompts = config.welcome.prompts.length > 0;
+    if (!hasMessage && !hasPrompts) return;
+    if (hasMessage) {
+      messages.push({ role: 'assistant', text: config.welcome.message, markdown: false });
+    }
+    ui.renderMessages(messages);
+    if (hasPrompts) ui.showSuggestedPrompts(config.welcome.prompts);
+  };
+
+  // Open the WS the first time the user actually opens the panel. Also
+  // seed the welcome bubble + chips at the same moment.
   ui.onPanelFirstOpen(async () => {
+    showWelcomeIfEmpty();
     try {
       const tok = await getToken({
         tokenEndpoint: config.tokenEndpoint,
@@ -90,9 +107,14 @@ function bootstrap(): void {
       echo = null;
     }
     ui.renderMessages(messages);
+    // Cleared mid-conversation — re-show welcome + chips for the fresh session.
+    showWelcomeIfEmpty();
   });
 
-  ui.onSubmit(async (text) => {
+  const submitText = async (text: string): Promise<void> => {
+    // Any submit hides the suggested-prompt chips. They're a "starter"
+    // affordance only — re-showing them mid-conversation would clutter.
+    ui.hideSuggestedPrompts();
     messages.push({ role: 'user', text });
     streamingMessage = null;
     ui.renderMessages(messages);
@@ -172,6 +194,14 @@ function bootstrap(): void {
       ui.setLoading(false);
       pendingAssistantResolve = null;
     }
+  };
+
+  ui.onSubmit(submitText);
+
+  // Clicking a suggested-prompt chip is a synthetic submit — same pipeline
+  // as a typed message so all the broadcast/fallback/error handling applies.
+  ui.onSuggestedPrompt((text) => {
+    void submitText(text);
   });
 
   /**
@@ -346,6 +376,7 @@ function delay(ms: number): Promise<void> {
 function readConfig(): WidgetConfig | null {
   const raw = window.__MINDUM_WIDGET__;
   if (!raw) return null;
+  const rawWelcome = (raw as { welcome?: { message?: string; prompts?: string[] } }).welcome;
   return {
     sessionId: raw.sessionId ?? '',
     endUserId: raw.endUserId ?? null,
@@ -354,6 +385,10 @@ function readConfig(): WidgetConfig | null {
     wsUrl: raw.wsUrl ?? '',
     theme: raw.theme ?? {},
     position: raw.position === 'bottom-left' ? 'bottom-left' : 'bottom-right',
+    welcome: {
+      message: typeof rawWelcome?.message === 'string' ? rawWelcome.message : 'Hi! How can I help you today?',
+      prompts: Array.isArray(rawWelcome?.prompts) ? rawWelcome.prompts.filter((p) => typeof p === 'string' && p.trim() !== '') : [],
+    },
   };
 }
 
