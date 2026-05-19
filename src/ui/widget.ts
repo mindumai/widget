@@ -307,7 +307,10 @@ export class WidgetUi {
     }
     const style = document.createElement('style');
     style.id = 'mindum-widget-styles';
-    style.textContent = buildStyles(this.config.theme.primary ?? '#0F172A');
+    // Fallback aligns with the dashboard's warm-amber default (Phase 3A.2 /
+    // FR-062). Customer SDKs that don't ship a custom primary color, and
+    // accounts that haven't touched the theming editor, both render amber.
+    style.textContent = buildStyles(this.config.theme.primary ?? '#d97706');
     document.head.appendChild(style);
     this.styleEl = style;
   }
