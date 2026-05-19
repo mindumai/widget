@@ -168,6 +168,24 @@ export function buildStyles(primary: string): string {
   50% { opacity: 0; }
 }
 
+/* Tool-progress pill — shown between assistant bubbles while a
+   tool_use is being executed (Phase 3D.3 / FR-049 / FR-057). The
+   three pulsing dots reuse the typing-indicator animation. */
+.mindum-widget-tool-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 10px 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(15,23,42,0.05);
+  color: #475569;
+  font-size: 12.5px;
+  line-height: 1.3;
+  align-self: flex-start;
+  max-width: fit-content;
+}
+
 .mindum-widget-prompts {
   display: flex;
   flex-wrap: wrap;

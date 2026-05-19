@@ -263,6 +263,18 @@ function bootstrap(): void {
     const text = extractText(msg.content);
     if (text === '') return;
 
+    // Edge case introduced by 3D.3 tool-progress: if tool_use_start
+    // finalized the streaming bubble before this widget.message arrived,
+    // streamingMessage is null but the bubble still sits in the timeline
+    // unowned. Re-attach this message id rather than pushing a duplicate.
+    const adoptable = findUnattachedAssistantBubble(messages, text);
+    if (adoptable) {
+      adoptable.messageId = msg.id;
+      ui.renderMessages(messages);
+      pendingAssistantResolve?.();
+      return;
+    }
+
     messages.push({ role: 'assistant', text, markdown: true, messageId: msg.id });
     ui.renderMessages(messages);
     pendingAssistantResolve?.();
@@ -356,30 +368,93 @@ function bootstrap(): void {
   });
 
   /**
-   * Apply a `widget.token` streaming delta. We only render text_delta
-   * events in 2D; tool_use_* events are forwarded but currently ignored
-   * (FR-057 tool-progress indicators are a future polish).
+   * Apply a `widget.token` streaming delta (Phase 2D streaming + 3D.3
+   * tool-progress pill). Three event types are interesting:
+   *
+   *  - text_delta: append to or start a streaming assistant bubble. If a
+   *    tool_progress pill is the most recent message (Claude is resuming
+   *    after a tool ran), remove it — "replaced by the assistant's final
+   *    text" per FR-049.
+   *  - tool_use_start: finalize the current streaming bubble and push a
+   *    pill ("Looking up user…") so the user has visible feedback during
+   *    the customer-MCP round trip.
+   *  - tool_use_input_delta and message_stop: ignored here — message_stop
+   *    is the per-Anthropic-call boundary; the chat-turn-level finalize
+   *    happens when the orchestrator broadcasts widget.message.
    */
   function applyToken(event: BroadcastToken): void {
-    if (event.type !== 'text_delta') return;
+    if (event.type === 'text_delta') {
+      // If the timeline ends with one or more progress pills, drop them —
+      // the assistant's next utterance supersedes them. Multiple in a row
+      // is rare but possible if Claude chained tools without commentary.
+      while (
+        messages.length > 0 &&
+        messages[messages.length - 1].role === 'tool_progress'
+      ) {
+        messages.pop();
+      }
 
-    if (!streamingMessage) {
-      streamingMessage = {
-        role: 'assistant',
-        text: event.text,
-        markdown: true,
-        streaming: true,
-      };
-      messages.push(streamingMessage);
-      // First token = assistant has arrived. Hide the typing indicator,
-      // resolve the race so the fallback timer stops competing.
+      if (!streamingMessage) {
+        streamingMessage = {
+          role: 'assistant',
+          text: event.text,
+          markdown: true,
+          streaming: true,
+        };
+        messages.push(streamingMessage);
+        // First token = assistant has arrived. Hide the typing indicator,
+        // resolve the race so the fallback timer stops competing.
+        ui.setLoading(false);
+        pendingAssistantResolve?.();
+      } else {
+        streamingMessage.text += event.text;
+      }
+      ui.renderMessages(messages);
+      return;
+    }
+
+    if (event.type === 'tool_use_start') {
+      // Close out the current bubble (if any) so the pill renders below
+      // the leading text Claude already produced.
+      if (streamingMessage) {
+        streamingMessage.streaming = false;
+        streamingMessage = null;
+      }
+      messages.push({
+        role: 'tool_progress',
+        text: '',
+        toolProgress: { toolName: event.name },
+      });
+      // Hide the typing indicator: the visible pill IS the progress signal
+      // from here on, and stacking both reads as duplicate noise.
       ui.setLoading(false);
       pendingAssistantResolve?.();
-    } else {
-      streamingMessage.text += event.text;
+      ui.renderMessages(messages);
+      return;
     }
-    ui.renderMessages(messages);
   }
+}
+
+/**
+ * Walk the timeline from newest to oldest, looking for a streaming-finalized
+ * assistant bubble whose text matches the persisted message we just got
+ * over the WS. This lets tool_use_start finalize the in-flight bubble for
+ * UX (drop caret, render markdown) without losing the message-id binding
+ * that widget.message normally provides. Stops scanning at the first
+ * non-tool_progress, non-assistant row so we never claim an older bubble.
+ */
+function findUnattachedAssistantBubble(
+  messages: UiMessage[],
+  text: string,
+): UiMessage | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role === 'tool_progress') continue;
+    if (m.role !== 'assistant') return undefined;
+    if (m.messageId !== undefined) return undefined;
+    return m.text === text ? m : undefined;
+  }
+  return undefined;
 }
 
 function extractText(blocks: ContentBlock[]): string {

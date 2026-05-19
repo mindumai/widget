@@ -177,7 +177,7 @@ export type ConfirmationCardState =
 
 /** What we keep in memory per chat session for rendering. */
 export interface UiMessage {
-  role: 'user' | 'assistant' | 'error' | 'confirmation';
+  role: 'user' | 'assistant' | 'error' | 'confirmation' | 'tool_progress';
   text: string;
   /** When the source was the WS broadcast, we hold the message id for de-dup against the HTTP fallback. */
   messageId?: number;
@@ -191,6 +191,11 @@ export interface UiMessage {
     conversationId: number;
     toolUses: PendingToolUse[];
     state: ConfirmationCardState;
+  };
+  /** Tool-progress pill payload (Phase 3D.3 / FR-049 / FR-057); only present when role === 'tool_progress'. */
+  toolProgress?: {
+    /** Raw tool_use name from the broadcast — e.g. `create_user`. We humanize at render time. */
+    toolName: string;
   };
 }
 

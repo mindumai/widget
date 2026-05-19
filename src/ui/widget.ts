@@ -111,6 +111,10 @@ export class WidgetUi {
         this.messagesEl.appendChild(this.buildConfirmationCard(m));
         continue;
       }
+      if (m.role === 'tool_progress' && m.toolProgress) {
+        this.messagesEl.appendChild(this.buildToolProgressPill(m));
+        continue;
+      }
       const wrapper = document.createElement('div');
       wrapper.className = 'mindum-widget-message';
       wrapper.dataset.role = m.role;
@@ -192,6 +196,26 @@ export class WidgetUi {
     }
 
     return wrapper;
+  }
+
+  /**
+   * Inline pill rendered while a tool_use is being executed by the
+   * orchestrator (Phase 3D.3 / FR-049 / FR-057). Removed when the next
+   * text_delta arrives — timeline reads: text → [tool ran] → text.
+   * Reuses .mindum-widget-typing-dot for the spinner visual.
+   */
+  private buildToolProgressPill(m: UiMessage): HTMLDivElement {
+    // role="status" implies aria-live="polite", no need to set it explicitly.
+    // textContent on the trailing span defends against tool names
+    // containing HTML-ish characters.
+    const w = document.createElement('div');
+    w.className = 'mindum-widget-tool-progress';
+    w.setAttribute('role', 'status');
+    const dot = '<span class="mindum-widget-typing-dot"></span>';
+    w.innerHTML = dot + dot + dot + '<span></span>';
+    (w.lastElementChild as HTMLElement).textContent =
+      `${humanizeToolNameProgressive(m.toolProgress!.toolName)}…`;
+    return w;
   }
 
   private buildToolUseRow(tu: PendingToolUse): HTMLLIElement {
@@ -326,6 +350,27 @@ function humanizeToolName(name: string): string {
   const words = name.split('_').filter((w) => w.length > 0);
   if (words.length === 0) return name;
   return words.map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase())).join(' ');
+}
+
+/**
+ * Gerund version of the tool name for the in-progress pill — `create_user`
+ * → "Creating user", `list_orders` → "Listing orders". Verbs we don't
+ * recognize fall back to "Running X" so it reads as in-progress, not as
+ * an imperative.
+ */
+const PROGRESSIVE_VERB: Record<string, string> = {
+  create: 'Creating', update: 'Updating', delete: 'Deleting',
+  remove: 'Removing', save: 'Saving', archive: 'Archiving',
+  list: 'Listing', get: 'Looking up', find: 'Looking up',
+};
+
+function humanizeToolNameProgressive(name: string): string {
+  const words = (name || '').split('_').filter(Boolean).map((w) => w.toLowerCase());
+  if (words.length === 0) return 'Working';
+  const gerund = PROGRESSIVE_VERB[words[0]];
+  return gerund
+    ? (words.length > 1 ? `${gerund} ${words.slice(1).join(' ')}` : gerund)
+    : `Running ${words.join(' ')}`;
 }
 
 /**
