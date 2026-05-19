@@ -179,7 +179,11 @@ function bootstrap(): void {
 
       if (reply.error) {
         streamingMessage = null;
-        messages.push({ role: 'error', text: humanizeServerError(reply.error) });
+        const r = reply.retry_after_seconds;
+        const text = reply.error === 'rate_limited' && r && r > 0
+          ? `The chat service is busy. Please try again in ${r}s.`
+          : humanizeServerError(reply.error);
+        messages.push({ role: 'error', text });
         ui.renderMessages(messages);
         ui.setLoading(false);
         return;
@@ -498,7 +502,7 @@ function humanizeClientError(err: unknown): string {
     return 'Could not start a chat session. Please retry.';
   }
   if (err instanceof ChatError) {
-    if (err.status === 401) return 'Your chat session expired. Please retry to refresh it.';
+    if (err.status === 401) return 'Your chat session expired. Please retry.';
     return `Chat request failed (${err.status}). Please retry.`;
   }
   return 'Something went wrong. Please retry.';
@@ -512,7 +516,7 @@ function humanizeServerError(code: string): string {
 
 function humanizeConfirmError(err: unknown): string {
   if (err instanceof ConfirmError) {
-    if (err.status === 401) return 'Your chat session expired. Please retry to refresh it.';
+    if (err.status === 401) return 'Your chat session expired. Please retry.';
     if (err.status === 404) return 'That action is no longer available — try sending a new message.';
     return `Could not complete the action (${err.status}). Please retry.`;
   }

@@ -111,6 +111,8 @@ export interface ChatTurnResponse {
   elapsed_ms: number;
   stub: boolean;
   error: string | null;
+  /** Anthropic Retry-After value, in seconds, when `error === 'rate_limited'`. */
+  retry_after_seconds?: number | null;
 }
 
 /**
