@@ -1,4 +1,5 @@
 import { postChat, ChatError } from './api/chat';
+import { postStop } from './api/stop';
 import { ConfirmError, postConfirm } from './api/confirm';
 import { createEchoClient, type EchoClient } from './api/echo';
 import { clearTokenCache, getToken, TokenMintError } from './api/token';
@@ -51,6 +52,10 @@ function bootstrap(): void {
   // arrive we append into this; when the corresponding widget.message lands
   // we finalize it (clear flag, apply markdown).
   let streamingMessage: UiMessage | null = null;
+  // W4: set when the user clicks stop. Subsequent token deltas for the
+  // dying turn are ignored locally — the cancelled widget.message broadcast
+  // (or the HTTP envelope) still finalizes the bubble.
+  let stopRequested = false;
 
   // Show the welcome + suggested-prompt chips if the conversation is empty.
   // Synthetic only — not persisted, not sent to Anthropic. Hides once the
@@ -135,10 +140,30 @@ function bootstrap(): void {
     showWelcomeIfEmpty();
   });
 
+  // W4 stop button: arm the server-side cancellation flag. The JWT is
+  // cached in memory, so this fires immediately; the orchestrator aborts
+  // between deltas and the normal finalize path closes the bubble.
+  ui.onStop(() => {
+    stopRequested = true;
+    void (async () => {
+      try {
+        const tok = await getToken({
+          tokenEndpoint: config.tokenEndpoint,
+          sessionId: config.sessionId,
+          endUserId: config.endUserId,
+        });
+        await postStop({ apiUrl: config.apiUrl, token: tok.token });
+      } catch {
+        // Mint failed — nothing to stop against; the turn finishes normally.
+      }
+    })();
+  });
+
   const submitText = async (text: string): Promise<void> => {
     // Any submit hides the suggested-prompt chips. They're a "starter"
     // affordance only — re-showing them mid-conversation would clutter.
     ui.hideSuggestedPrompts();
+    stopRequested = false;
     messages.push({ role: 'user', text });
     streamingMessage = null;
     ui.renderMessages(messages);
@@ -279,6 +304,12 @@ function bootstrap(): void {
       return;
     }
 
+    // A brand-new final assistant message supersedes any tool-progress
+    // pills still spinning (e.g. a turn cancelled during tool execution —
+    // the marker row arrives while the pill is the last thing rendered).
+    while (messages.length > 0 && messages[messages.length - 1].role === 'tool_progress') {
+      messages.pop();
+    }
     messages.push({ role: 'assistant', text, markdown: true, messageId: msg.id });
     ui.renderMessages(messages);
     pendingAssistantResolve?.();
@@ -387,6 +418,11 @@ function bootstrap(): void {
    *    happens when the orchestrator broadcasts widget.message.
    */
   function applyToken(event: BroadcastToken): void {
+    // W4: the user already clicked stop — don't keep painting the dying
+    // turn's deltas. The cancelled widget.message still finalizes cleanly.
+    if (stopRequested && (event.type === 'text_delta' || event.type === 'tool_use_start')) {
+      return;
+    }
     if (event.type === 'text_delta') {
       // If the timeline ends with one or more progress pills, drop them —
       // the assistant's next utterance supersedes them. Multiple in a row
@@ -530,5 +566,5 @@ function humanizeConfirmError(err: unknown): string {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', bootstrap);
 } else {
-  bootstrap();
+    bootstrap();
 }

@@ -674,6 +674,13 @@ export function buildStyles(primary: string): string {
   .mindum-widget-pre .mindum-widget-copy { opacity: 0.75; }
 }
 
+/* ---------- Send → Stop morph (W4) ---------- */
+.mindum-widget-send .mindum-widget-ic-stop { display: none; }
+.mindum-widget-root.is-loading .mindum-widget-send { background: var(--mw-ink); opacity: 1; cursor: pointer; }
+.mindum-widget-root.is-loading .mindum-widget-send .mindum-widget-ic-send { display: none; }
+.mindum-widget-root.is-loading .mindum-widget-send .mindum-widget-ic-stop { display: block; }
+.mindum-widget-root[data-mw-dark="true"].is-loading .mindum-widget-send { background: var(--mw-paper-2); color: var(--mw-ink); }
+
 /* ---------- Voice (W3) ---------- */
 .mindum-widget-speak {
   border: none; background: transparent; cursor: pointer; color: var(--mw-ink-soft);

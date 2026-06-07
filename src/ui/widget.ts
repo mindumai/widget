@@ -22,6 +22,11 @@ import { createReadAloud, createSpeechInput, type ReadAloud, type SpeechInput } 
  * W3 voice: mic dictation into the composer (SpeechRecognition, hidden
  * where unsupported) and a read-aloud toggle that speaks each finalized
  * assistant reply (speechSynthesis). Both in ui/voice.ts.
+ *
+ * W4 stop: while a turn is in flight the send button morphs into a stop
+ * button (square icon, ink background). Clicking it fires onStop — the
+ * bootstrap POSTs /api/widget/chat/stop and the orchestrator finalizes
+ * the turn as 'cancelled'.
  */
 export class WidgetUi {
   private root: HTMLDivElement;
@@ -51,6 +56,8 @@ export class WidgetUi {
   private onConfirmDecision: (messageId: number, decision: 'approve' | 'reject') => void = () => {};
 
   private onPromptClick: (text: string) => void = () => {};
+
+  private onStopRequest: () => void = () => {};
 
   private firstOpenFired = false;
 
@@ -128,6 +135,11 @@ export class WidgetUi {
   /** Fires when the user clicks one of the welcome-screen suggested-prompt chips (FR-054). */
   onSuggestedPrompt(handler: (text: string) => void): void {
     this.onPromptClick = handler;
+  }
+
+  /** Fires when the user clicks the stop button mid-stream (W4). */
+  onStop(handler: () => void): void {
+    this.onStopRequest = handler;
   }
 
   /**
@@ -356,9 +368,15 @@ export class WidgetUi {
     if (!loading) this.input.focus();
   }
 
-  /** Send is disabled while loading or when the textarea is empty. */
+  /**
+   * While idle: send is disabled when the textarea is empty. While a turn
+   * is in flight the same button becomes the STOP control (W4) — enabled,
+   * stop icon via the .is-loading CSS swap.
+   */
   private refreshSend(): void {
-    this.sendBtn.disabled = this.loading || this.input.value.trim() === '';
+    this.sendBtn.disabled = this.loading ? false : this.input.value.trim() === '';
+    this.sendBtn.setAttribute('aria-label', this.loading ? 'Stop' : 'Send');
+    this.sendBtn.title = this.loading ? 'Stop generating' : 'Send';
   }
 
   /** Auto-grow the textarea up to its CSS max-height. */
@@ -557,6 +575,11 @@ export class WidgetUi {
     });
     this.form.addEventListener('submit', (e) => {
       e.preventDefault();
+      if (this.loading) {
+        // The send button is the stop button right now (W4).
+        this.onStopRequest();
+        return;
+      }
       this.submit();
     });
   }
@@ -617,7 +640,8 @@ export class WidgetUi {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
             </button>
             <button type="submit" class="mindum-widget-send" aria-label="Send" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              <svg class="mindum-widget-ic-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              <svg class="mindum-widget-ic-stop" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2"></rect></svg>
             </button>
           </div>
           <div class="mindum-widget-footnote"><b>Enter</b> to send · <b>Shift+Enter</b> for a new line</div>
