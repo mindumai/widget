@@ -5,6 +5,12 @@ import { buildStyles } from './styles';
 /**
  * Vanilla DOM widget. No framework — each method updates the bits of the
  * DOM it owns. Small enough that this is fine.
+ *
+ * W1 redesign (Widget_UI_Plan.md): launcher stays visible and morphs
+ * chat↔close, panel floats above it with a spring transition, header
+ * carries an avatar + live status, the composer is an auto-growing
+ * textarea (Enter sends, Shift+Enter newlines), and the welcome message
+ * renders as a serif heading block instead of an assistant bubble.
  */
 export class WidgetUi {
   private root: HTMLDivElement;
@@ -13,7 +19,9 @@ export class WidgetUi {
 
   private form: HTMLFormElement;
 
-  private input: HTMLInputElement;
+  private composer: HTMLDivElement;
+
+  private input: HTMLTextAreaElement;
 
   private sendBtn: HTMLButtonElement;
 
@@ -29,6 +37,8 @@ export class WidgetUi {
 
   private firstOpenFired = false;
 
+  private loading = false;
+
   private promptsEl: HTMLDivElement | null = null;
 
   private styleEl: HTMLStyleElement | null = null;
@@ -38,7 +48,8 @@ export class WidgetUi {
     this.root = this.buildRoot();
     this.messagesEl = this.root.querySelector<HTMLDivElement>('.mindum-widget-messages')!;
     this.form = this.root.querySelector<HTMLFormElement>('.mindum-widget-form')!;
-    this.input = this.root.querySelector<HTMLInputElement>('.mindum-widget-input')!;
+    this.composer = this.root.querySelector<HTMLDivElement>('.mindum-widget-composer')!;
+    this.input = this.root.querySelector<HTMLTextAreaElement>('.mindum-widget-input')!;
     this.sendBtn = this.root.querySelector<HTMLButtonElement>('.mindum-widget-send')!;
 
     this.wireEvents();
@@ -71,8 +82,8 @@ export class WidgetUi {
   }
 
   /**
-   * Render a row of clickable starter chips below the welcome bubble.
-   * Idempotent: replaces any existing chip row. Empty array hides them.
+   * Render a column of clickable starter chips below the welcome block.
+   * Idempotent: replaces any existing chip column. Empty array hides them.
    */
   showSuggestedPrompts(prompts: string[]): void {
     this.hideSuggestedPrompts();
@@ -83,7 +94,10 @@ export class WidgetUi {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'mindum-widget-prompt-chip';
-      chip.textContent = p;
+      chip.innerHTML = SPARK_SVG;
+      const label = document.createElement('span');
+      label.textContent = p;
+      chip.appendChild(label);
       chip.addEventListener('click', () => {
         // Capture the text now — once hideSuggestedPrompts runs the button
         // is gone from the DOM but the click handler closure still holds it.
@@ -96,7 +110,7 @@ export class WidgetUi {
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
   }
 
-  /** Remove the chip row if present. Called on any first submit. */
+  /** Remove the chip column if present. Called on any first submit. */
   hideSuggestedPrompts(): void {
     if (this.promptsEl) {
       this.promptsEl.remove();
@@ -107,6 +121,10 @@ export class WidgetUi {
   renderMessages(messages: UiMessage[]): void {
     this.messagesEl.innerHTML = '';
     for (const m of messages) {
+      if (m.welcome) {
+        this.messagesEl.appendChild(this.buildWelcomeBlock(m));
+        continue;
+      }
       if (m.role === 'confirmation' && m.confirmation) {
         this.messagesEl.appendChild(this.buildConfirmationCard(m));
         continue;
@@ -142,6 +160,20 @@ export class WidgetUi {
   }
 
   /**
+   * The synthetic first-open welcome (FR-054) renders as a serif heading
+   * block, not a chat bubble — the one deliberate serif moment in the
+   * widget (W-L5). textContent, never HTML: the string is customer config.
+   */
+  private buildWelcomeBlock(m: UiMessage): HTMLDivElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'mindum-widget-welcome';
+    const h = document.createElement('h2');
+    h.textContent = m.text;
+    wrap.appendChild(h);
+    return wrap;
+  }
+
+  /**
    * Render a confirmation card for one or more deferred tool_use blocks.
    * Card states drive the button enabled state and the trailing badge:
    *   - pending: both buttons active
@@ -156,7 +188,10 @@ export class WidgetUi {
 
     const title = document.createElement('div');
     title.className = 'mindum-widget-confirm-title';
-    title.textContent = c.toolUses.length === 1 ? 'Confirm action' : `Confirm ${c.toolUses.length} actions`;
+    title.innerHTML = WARN_SVG;
+    const titleText = document.createElement('span');
+    titleText.textContent = c.toolUses.length === 1 ? 'Confirm action' : `Confirm ${c.toolUses.length} actions`;
+    title.appendChild(titleText);
     wrapper.appendChild(title);
 
     const list = document.createElement('ul');
@@ -238,33 +273,73 @@ export class WidgetUi {
   }
 
   setLoading(loading: boolean): void {
+    this.loading = loading;
     this.root.classList.toggle('is-loading', loading);
-    this.sendBtn.disabled = loading;
     this.input.disabled = loading;
+    this.refreshSend();
     if (!loading) this.input.focus();
+  }
+
+  /** Send is disabled while loading or when the textarea is empty. */
+  private refreshSend(): void {
+    this.sendBtn.disabled = this.loading || this.input.value.trim() === '';
+  }
+
+  /** Auto-grow the textarea up to its CSS max-height. */
+  private autoGrow(): void {
+    this.input.style.height = 'auto';
+    this.input.style.height = `${Math.min(this.input.scrollHeight, 120)}px`;
+  }
+
+  private submit(): void {
+    const text = this.input.value.trim();
+    if (!text || this.loading) return;
+    this.input.value = '';
+    this.autoGrow();
+    this.refreshSend();
+    this.onSend(text);
+  }
+
+  private setOpen(open: boolean): void {
+    this.root.classList.toggle('is-open', open);
+    const bubble = this.root.querySelector<HTMLButtonElement>('.mindum-widget-bubble')!;
+    bubble.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
+    if (!open) return;
+    this.input.focus();
+    if (!this.firstOpenFired) {
+      this.firstOpenFired = true;
+      this.onFirstOpen();
+    }
   }
 
   private wireEvents(): void {
     this.root.querySelector<HTMLButtonElement>('.mindum-widget-bubble')!.addEventListener('click', () => {
-      this.root.classList.add('is-open');
-      this.input.focus();
-      if (!this.firstOpenFired) {
-        this.firstOpenFired = true;
-        this.onFirstOpen();
-      }
+      this.setOpen(!this.root.classList.contains('is-open'));
     });
     this.root.querySelector<HTMLButtonElement>('.mindum-widget-close')!.addEventListener('click', () => {
-      this.root.classList.remove('is-open');
+      this.setOpen(false);
     });
     this.root.querySelector<HTMLButtonElement>('.mindum-widget-clear')!.addEventListener('click', () => {
       this.onClearConversation();
     });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.root.classList.contains('is-open')) this.setOpen(false);
+    });
+    this.input.addEventListener('input', () => {
+      this.autoGrow();
+      this.refreshSend();
+    });
+    this.input.addEventListener('focus', () => this.composer.classList.add('is-focus'));
+    this.input.addEventListener('blur', () => this.composer.classList.remove('is-focus'));
+    this.input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.submit();
+      }
+    });
     this.form.addEventListener('submit', (e) => {
       e.preventDefault();
-      const text = this.input.value.trim();
-      if (!text) return;
-      this.input.value = '';
-      this.onSend(text);
+      this.submit();
     });
   }
 
@@ -275,33 +350,47 @@ export class WidgetUi {
     root.innerHTML = `
       <div class="mindum-widget-panel" role="dialog" aria-label="Mindum chat">
         <div class="mindum-widget-header">
-          <span>Chat</span>
+          <div class="mindum-widget-head-avatar" aria-hidden="true">${SPARK_SVG}</div>
+          <div class="mindum-widget-head-text">
+            <div class="mindum-widget-head-title">Assistant</div>
+            <div class="mindum-widget-head-status"><span class="mindum-widget-head-dot"></span>Online</div>
+          </div>
           <div class="mindum-widget-header-actions">
             <button type="button" class="mindum-widget-clear" aria-label="Clear conversation" title="Clear conversation">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 6h18"></path>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
                 <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
               </svg>
             </button>
-            <button type="button" class="mindum-widget-close" aria-label="Close">&times;</button>
+            <button type="button" class="mindum-widget-close" aria-label="Close" title="Close">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
           </div>
         </div>
-        <div class="mindum-widget-messages"></div>
+        <div class="mindum-widget-messages" role="log" aria-live="polite"></div>
         <div class="mindum-widget-typing" aria-label="Assistant is typing">
           <span class="mindum-widget-typing-dot"></span>
           <span class="mindum-widget-typing-dot"></span>
           <span class="mindum-widget-typing-dot"></span>
         </div>
         <form class="mindum-widget-form">
-          <input type="text" class="mindum-widget-input" placeholder="Type a message…" autocomplete="off" />
-          <button type="submit" class="mindum-widget-send">Send</button>
+          <div class="mindum-widget-composer">
+            <textarea class="mindum-widget-input" rows="1" placeholder="Ask anything…" aria-label="Message"></textarea>
+            <button type="submit" class="mindum-widget-send" aria-label="Send" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+          </div>
+          <div class="mindum-widget-footnote"><b>Enter</b> to send · <b>Shift+Enter</b> for a new line</div>
         </form>
       </div>
       <button type="button" class="mindum-widget-bubble" aria-label="Open chat">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        <svg class="mindum-widget-ic-chat" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path class="mindum-widget-spk-big" d="M11 3c.4 3.6 1.8 6 6.6 6.6-4.8.6-6.2 3-6.6 6.6-.4-3.6-1.8-6-6.6-6.6C9.2 9 10.6 6.6 11 3z"></path>
+          <path class="mindum-widget-spk-s1" d="M18.5 3.2c.15 1.4.65 2.3 2.5 2.5-1.85.2-2.35 1.1-2.5 2.5-.15-1.4-.65-2.3-2.5-2.5 1.85-.2 2.35-1.1 2.5-2.5z"></path>
+          <path class="mindum-widget-spk-s2" d="M17 15c.15 1.3.6 2.1 2.3 2.3-1.7.2-2.15 1-2.3 2.3-.15-1.3-.6-2.1-2.3-2.3 1.7-.2 2.15-1 2.3-2.3z"></path>
         </svg>
+        <svg class="mindum-widget-ic-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
     `;
     return root;
@@ -339,6 +428,14 @@ export class WidgetUi {
     this.styleEl = style;
   }
 }
+
+/** Four-point sparkle — the widget's "agent" mark (launcher + avatar + chips). */
+const SPARK_SVG =
+  '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 3c.4 3.6 1.8 6 6.6 6.6-4.8.6-6.2 3-6.6 6.6-.4-3.6-1.8-6-6.6-6.6C9.2 9 10.6 6.6 11 3z"></path></svg>';
+
+/** Warning triangle for the confirmation-card title. */
+const WARN_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
 
 /**
  * Turn `create_task` into "Create task", `delete_user` into "Delete user".

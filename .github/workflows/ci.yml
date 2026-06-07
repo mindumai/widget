@@ -29,5 +29,5 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Bundle-size gate (NFR-005 < 50 KB gzipped)
+      - name: Bundle-size gate (NFR-005 < 100 KB gzipped)
         run: npm run size

@@ -187,6 +187,8 @@ export interface UiMessage {
   markdown?: boolean;
   /** When tokens are still streaming in (2D). Suppresses markdown render + shows a caret in the bubble. */
   streaming?: boolean;
+  /** Synthetic first-open welcome (FR-054). Renders as the serif heading block, not a chat bubble (W1). */
+  welcome?: boolean;
   /** Confirmation-card payload; only present when role === 'confirmation'. */
   confirmation?: {
     messageId: number;

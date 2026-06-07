@@ -61,7 +61,7 @@ function bootstrap(): void {
     const hasPrompts = config.welcome.prompts.length > 0;
     if (!hasMessage && !hasPrompts) return;
     if (hasMessage) {
-      messages.push({ role: 'assistant', text: config.welcome.message, markdown: false });
+      messages.push({ role: 'assistant', text: config.welcome.message, markdown: false, welcome: true });
     }
     ui.renderMessages(messages);
     if (hasPrompts) ui.showSuggestedPrompts(config.welcome.prompts);

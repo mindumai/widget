@@ -8,10 +8,10 @@
 //
 // NFR-005 was originally 50 KB. Bumped to 51 KB on 2026-05-19 when Phase
 // 3D.4 (Retry-After surfacing for rate_limited) added ~50 bytes gzipped
-// and put us 20 bytes over. The 50 KB cap was always a round figure;
-// 51 KB is still tiny for a B2B chat widget. Alternatives — skipping a
-// documented FR, or doing a multi-hour pusher-js → native-WS swap solely
-// for headroom — weren't worth the cost. Revisit before the next bump.
+// and put us 20 bytes over. Bumped to 100 KB on 2026-06-07 (Widget_UI_Plan
+// W-L9, Azhar's call) to make room for the W1-W5 UI redesign without
+// byte-golfing every phase; commercial widgets ship 100-300+ KB, so 100
+// keeps us lean. The optional W6 native-WS swap claws back ~20.6 KB.
 
 import { readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const bundlePath = resolve(__dirname, '..', 'dist', 'widget.iife.js');
-const MAX_GZIPPED_BYTES = 51 * 1024; // NFR-005 (bumped 2026-05-19 from 50)
+const MAX_GZIPPED_BYTES = 100 * 1024; // NFR-005 (bumped 2026-06-07 from 51 — W-L9)
 
 try {
   statSync(bundlePath);
