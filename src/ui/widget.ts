@@ -1,4 +1,5 @@
 import type { PendingToolUse, UiMessage, WidgetConfig } from '../types';
+import { enhanceCodeBlocks } from './highlight';
 import { renderMarkdown } from './markdown';
 import { buildStyles } from './styles';
 
@@ -11,11 +12,22 @@ import { buildStyles } from './styles';
  * carries an avatar + live status, the composer is an auto-growing
  * textarea (Enter sends, Shift+Enter newlines), and the welcome message
  * renders as a serif heading block instead of an assistant bubble.
+ *
+ * W2 behaviors: smart autoscroll with a jump-to-latest pill (no more
+ * yanking the scroll mid-read), end-user dark toggle persisted in
+ * sessionStorage (W-L2), expand-to-fullscreen, drag-to-resize from the
+ * top/side/corner, and code blocks get a copy button + micro-highlighter.
  */
 export class WidgetUi {
   private root: HTMLDivElement;
 
+  private panel: HTMLDivElement;
+
   private messagesEl: HTMLDivElement;
+
+  private typingEl: HTMLDivElement;
+
+  private jumpEl: HTMLButtonElement;
 
   private form: HTMLFormElement;
 
@@ -39,6 +51,11 @@ export class WidgetUi {
 
   private loading = false;
 
+  /** False once the user scrolls up; re-renders then show the jump pill instead of force-scrolling. */
+  private stickToBottom = true;
+
+  private expanded = false;
+
   private promptsEl: HTMLDivElement | null = null;
 
   private styleEl: HTMLStyleElement | null = null;
@@ -46,13 +63,23 @@ export class WidgetUi {
   constructor(private readonly config: WidgetConfig) {
     this.injectStyles();
     this.root = this.buildRoot();
+    this.panel = this.root.querySelector<HTMLDivElement>('.mindum-widget-panel')!;
     this.messagesEl = this.root.querySelector<HTMLDivElement>('.mindum-widget-messages')!;
+    this.typingEl = this.root.querySelector<HTMLDivElement>('.mindum-widget-typing')!;
+    this.jumpEl = this.root.querySelector<HTMLButtonElement>('.mindum-widget-jump')!;
     this.form = this.root.querySelector<HTMLFormElement>('.mindum-widget-form')!;
     this.composer = this.root.querySelector<HTMLDivElement>('.mindum-widget-composer')!;
     this.input = this.root.querySelector<HTMLTextAreaElement>('.mindum-widget-input')!;
     this.sendBtn = this.root.querySelector<HTMLButtonElement>('.mindum-widget-send')!;
 
+    // Re-apply the visitor's dark choice from this tab's earlier page views (W-L2).
+    if (safeSessionGet('mindum.dark') === '1') {
+      this.root.dataset.mwDark = 'true';
+      this.root.querySelector('.mindum-widget-dark')?.setAttribute('aria-label', 'Switch to light mode');
+    }
+
     this.wireEvents();
+    this.wireResize();
     document.body.appendChild(this.root);
   }
 
@@ -107,6 +134,7 @@ export class WidgetUi {
     }
     this.messagesEl.appendChild(wrap);
     this.promptsEl = wrap;
+    this.stickToBottom = true;
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
   }
 
@@ -149,14 +177,17 @@ export class WidgetUi {
         // bubble finalizes — partial markdown like "**foo" renders weirdly,
         // and the cost of re-running marked on every delta isn't worth it.
         bubble.innerHTML = renderMarkdown(m.text);
+        enhanceCodeBlocks(bubble);
       } else {
         bubble.textContent = m.text;
       }
       wrapper.appendChild(bubble);
       this.messagesEl.appendChild(wrapper);
     }
-    // Scroll to bottom so the latest message is visible.
-    this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+    // Smart autoscroll (W2): follow the conversation only while the user
+    // is at the bottom; otherwise offer the jump pill and leave their
+    // scroll position alone.
+    this.scrollDown();
   }
 
   /**
@@ -277,6 +308,7 @@ export class WidgetUi {
     this.root.classList.toggle('is-loading', loading);
     this.input.disabled = loading;
     this.refreshSend();
+    this.positionJump();
     if (!loading) this.input.focus();
   }
 
@@ -289,22 +321,149 @@ export class WidgetUi {
   private autoGrow(): void {
     this.input.style.height = 'auto';
     this.input.style.height = `${Math.min(this.input.scrollHeight, 120)}px`;
+    this.positionJump();
   }
 
   private submit(): void {
     const text = this.input.value.trim();
     if (!text || this.loading) return;
+    // Sending your own message always returns you to the live tail.
+    this.stickToBottom = true;
     this.input.value = '';
     this.autoGrow();
     this.refreshSend();
     this.onSend(text);
   }
 
+  /* ---------- W2: smart autoscroll ---------- */
+
+  private nearBottom(): boolean {
+    const el = this.messagesEl;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  }
+
+  /** Follow the tail when stuck to the bottom; otherwise surface the jump pill. */
+  private scrollDown(force = false): void {
+    if (force || this.stickToBottom) {
+      this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+      this.jumpEl.classList.remove('is-show');
+      return;
+    }
+    this.positionJump();
+    this.jumpEl.classList.add('is-show');
+  }
+
+  /** Keep the pill floating just above the (variable-height) composer + typing bubble. */
+  private positionJump(): void {
+    const typing = this.loading ? this.typingEl.offsetHeight + 8 : 0;
+    this.jumpEl.style.bottom = `${this.form.offsetHeight + typing + 12}px`;
+  }
+
+  /* ---------- W2: dark mode / expand ---------- */
+
+  private toggleDark(): void {
+    const on = this.root.dataset.mwDark !== 'true';
+    if (on) {
+      this.root.dataset.mwDark = 'true';
+    } else {
+      delete this.root.dataset.mwDark;
+    }
+    safeSessionSet('mindum.dark', on ? '1' : '0');
+    this.root.querySelector('.mindum-widget-dark')?.setAttribute(
+      'aria-label',
+      on ? 'Switch to light mode' : 'Switch to dark mode',
+    );
+  }
+
+  private toggleExpand(): void {
+    this.expanded = !this.expanded;
+    this.root.classList.toggle('is-expanded', this.expanded);
+    if (this.expanded) {
+      // Inline drag-resize sizes would fight the fullscreen rules.
+      this.panel.style.width = '';
+      this.panel.style.height = '';
+    }
+    const btn = this.root.querySelector('.mindum-widget-expand');
+    btn?.setAttribute('aria-label', this.expanded ? 'Exit full screen' : 'Expand');
+    (btn as HTMLButtonElement | null)?.setAttribute('title', this.expanded ? 'Exit full screen' : 'Expand');
+    if (this.stickToBottom) this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+  }
+
+  /* ---------- W2: drag-to-resize ---------- */
+
+  private wireResize(): void {
+    const handles = this.root.querySelectorAll<HTMLDivElement>('.mindum-widget-rz');
+    const MINW = 300;
+    const MINH = 400;
+    let sx = 0;
+    let sy = 0;
+    let sw = 0;
+    let sh = 0;
+    let dir = '';
+    let active = false;
+
+    const down = (e: PointerEvent): void => {
+      if (this.expanded || isNarrowViewport()) return;
+      const el = e.currentTarget as HTMLDivElement;
+      dir = el.dataset.rz ?? '';
+      active = true;
+      sx = e.clientX;
+      sy = e.clientY;
+      sw = this.panel.offsetWidth;
+      sh = this.panel.offsetHeight;
+      this.panel.classList.add('is-resizing');
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* pointer capture unsupported — drag still works while over the handle */
+      }
+      e.preventDefault();
+    };
+    const move = (e: PointerEvent): void => {
+      if (!active) return;
+      const maxW = window.innerWidth - 42;
+      const maxH = window.innerHeight - 120;
+      if (dir.includes('x')) {
+        // Anchored corner flips the drag direction: bottom-right panels
+        // grow leftward, bottom-left panels grow rightward.
+        const delta = this.root.dataset.position === 'bottom-left' ? e.clientX - sx : sx - e.clientX;
+        this.panel.style.width = `${Math.max(MINW, Math.min(sw + delta, maxW))}px`;
+      }
+      if (dir.includes('y')) {
+        this.panel.style.height = `${Math.max(MINH, Math.min(sh + (sy - e.clientY), maxH))}px`;
+      }
+    };
+    const end = (e: PointerEvent): void => {
+      if (!active) return;
+      active = false;
+      this.panel.classList.remove('is-resizing');
+      try {
+        (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
+    };
+
+    handles.forEach((h) => {
+      h.addEventListener('pointerdown', down);
+      h.addEventListener('pointermove', move);
+      h.addEventListener('pointerup', end);
+      h.addEventListener('pointercancel', end);
+      h.addEventListener('dblclick', () => {
+        this.panel.style.width = '';
+        this.panel.style.height = '';
+      });
+    });
+  }
+
   private setOpen(open: boolean): void {
     this.root.classList.toggle('is-open', open);
     const bubble = this.root.querySelector<HTMLButtonElement>('.mindum-widget-bubble')!;
     bubble.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
-    if (!open) return;
+    if (!open) {
+      if (this.expanded) this.toggleExpand();
+      return;
+    }
     this.input.focus();
     if (!this.firstOpenFired) {
       this.firstOpenFired = true;
@@ -321,6 +480,21 @@ export class WidgetUi {
     });
     this.root.querySelector<HTMLButtonElement>('.mindum-widget-clear')!.addEventListener('click', () => {
       this.onClearConversation();
+    });
+    this.root.querySelector<HTMLButtonElement>('.mindum-widget-dark')!.addEventListener('click', () => {
+      this.toggleDark();
+    });
+    this.root.querySelector<HTMLButtonElement>('.mindum-widget-expand')!.addEventListener('click', () => {
+      this.toggleExpand();
+    });
+    this.jumpEl.addEventListener('click', () => {
+      this.stickToBottom = true;
+      this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+      this.jumpEl.classList.remove('is-show');
+    });
+    this.messagesEl.addEventListener('scroll', () => {
+      this.stickToBottom = this.nearBottom();
+      if (this.stickToBottom) this.jumpEl.classList.remove('is-show');
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.root.classList.contains('is-open')) this.setOpen(false);
@@ -349,6 +523,9 @@ export class WidgetUi {
     root.dataset.position = this.config.position;
     root.innerHTML = `
       <div class="mindum-widget-panel" role="dialog" aria-label="Mindum chat">
+        <div class="mindum-widget-rz" data-rz="xy" aria-hidden="true"></div>
+        <div class="mindum-widget-rz" data-rz="y" aria-hidden="true"></div>
+        <div class="mindum-widget-rz" data-rz="x" aria-hidden="true"></div>
         <div class="mindum-widget-header">
           <div class="mindum-widget-head-avatar" aria-hidden="true">${SPARK_SVG}</div>
           <div class="mindum-widget-head-text">
@@ -356,6 +533,14 @@ export class WidgetUi {
             <div class="mindum-widget-head-status"><span class="mindum-widget-head-dot"></span>Online</div>
           </div>
           <div class="mindum-widget-header-actions">
+            <button type="button" class="mindum-widget-dark" aria-label="Switch to dark mode" title="Dark / light">
+              <svg class="mindum-widget-ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+              <svg class="mindum-widget-ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line><line x1="4.9" y1="4.9" x2="6.8" y2="6.8"></line><line x1="17.2" y1="17.2" x2="19.1" y2="19.1"></line><line x1="4.9" y1="19.1" x2="6.8" y2="17.2"></line><line x1="17.2" y1="6.8" x2="19.1" y2="4.9"></line></svg>
+            </button>
+            <button type="button" class="mindum-widget-expand" aria-label="Expand" title="Expand">
+              <svg class="mindum-widget-ic-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+              <svg class="mindum-widget-ic-contract" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+            </button>
             <button type="button" class="mindum-widget-clear" aria-label="Clear conversation" title="Clear conversation">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 6h18"></path>
@@ -369,6 +554,10 @@ export class WidgetUi {
           </div>
         </div>
         <div class="mindum-widget-messages" role="log" aria-live="polite"></div>
+        <button type="button" class="mindum-widget-jump" aria-label="Jump to latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          New message
+        </button>
         <div class="mindum-widget-typing" aria-label="Assistant is typing">
           <span class="mindum-widget-typing-dot"></span>
           <span class="mindum-widget-typing-dot"></span>
@@ -436,6 +625,27 @@ const SPARK_SVG =
 /** Warning triangle for the confirmation-card title. */
 const WARN_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+
+/** Narrow-viewport check — mirrors the CSS fullscreen breakpoint. */
+function isNarrowViewport(): boolean {
+  return window.matchMedia('(max-width: 480px)').matches;
+}
+
+function safeSessionGet(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSessionSet(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    /* storage blocked (private mode / host CSP) — dark just won't persist */
+  }
+}
 
 /**
  * Turn `create_task` into "Create task", `delete_user` into "Delete user".

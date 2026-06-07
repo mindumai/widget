@@ -51,6 +51,9 @@ export function buildStyles(primary: string): string {
   const accentSoft = rgbToHex(tint(rgb, 0.87));
   const accentGlowA = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.40)`;
   const accentGlowB = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0)`;
+  const rgbBright = tint(rgb, 0.15);
+  const accentBright = rgbToHex(rgbBright);
+  const accentSoftDark = `rgba(${rgbBright[0]},${rgbBright[1]},${rgbBright[2]},0.16)`;
 
   return `
 .mindum-widget-root {
@@ -129,6 +132,7 @@ export function buildStyles(primary: string): string {
 
 /* ---------- Panel ---------- */
 .mindum-widget-panel {
+  position: relative;
   display: flex; flex-direction: column; overflow: hidden;
   width: 384px; height: 560px;
   max-width: calc(100vw - 32px); max-height: calc(100vh - 130px);
@@ -497,6 +501,178 @@ export function buildStyles(primary: string): string {
   margin-top: 7px;
 }
 .mindum-widget-footnote b { color: var(--mw-ink-soft); font-weight: 500; }
+
+/* ---------- Jump-to-latest pill (W2) ---------- */
+.mindum-widget-jump {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%) translateY(8px);
+  display: flex; align-items: center; gap: 6px;
+  border: none; cursor: pointer;
+  background: var(--mw-ink);
+  color: var(--mw-cream);
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  padding: 6px 12px; border-radius: 20px;
+  box-shadow: 0 4px 14px rgba(42,37,30,0.25);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--mw-sm) var(--mw-out), transform var(--mw-sm) var(--mw-spring);
+  z-index: 3;
+}
+.mindum-widget-jump.is-show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+.mindum-widget-jump svg { width: 13px; height: 13px; }
+
+/* ---------- Header icon buttons: dark + expand (W2) ---------- */
+.mindum-widget-dark,
+.mindum-widget-expand {
+  border: none; background: transparent; cursor: pointer; color: var(--mw-ink-soft);
+  width: 30px; height: 30px; border-radius: 8px;
+  display: grid; place-items: center; padding: 0;
+  transition: background var(--mw-xs) var(--mw-out), color var(--mw-xs) var(--mw-out), transform var(--mw-xs) var(--mw-out);
+}
+.mindum-widget-dark:hover,
+.mindum-widget-expand:hover { background: var(--mw-paper-2); color: var(--mw-ink); }
+.mindum-widget-dark:active,
+.mindum-widget-expand:active { transform: scale(0.9); }
+.mindum-widget-dark svg,
+.mindum-widget-expand svg { width: 16px; height: 16px; }
+.mindum-widget-dark .mindum-widget-ic-sun { display: none; }
+.mindum-widget-root[data-mw-dark="true"] .mindum-widget-dark .mindum-widget-ic-sun { display: block; }
+.mindum-widget-root[data-mw-dark="true"] .mindum-widget-dark .mindum-widget-ic-moon { display: none; }
+.mindum-widget-expand .mindum-widget-ic-contract { display: none; }
+.mindum-widget-root.is-expanded .mindum-widget-expand .mindum-widget-ic-expand { display: none; }
+.mindum-widget-root.is-expanded .mindum-widget-expand .mindum-widget-ic-contract { display: block; }
+
+/* ---------- Expand / fullscreen (W2) ---------- */
+.mindum-widget-root.is-expanded .mindum-widget-panel {
+  position: fixed; inset: 0;
+  width: auto; height: auto;
+  max-width: none; max-height: none;
+  border-radius: 0; margin: 0;
+}
+.mindum-widget-root.is-expanded .mindum-widget-messages {
+  padding-left: max(14px, calc((100vw - 768px) / 2));
+  padding-right: max(14px, calc((100vw - 768px) / 2));
+}
+.mindum-widget-root.is-expanded .mindum-widget-form {
+  padding-left: max(12px, calc((100vw - 768px) / 2));
+  padding-right: max(12px, calc((100vw - 768px) / 2));
+}
+.mindum-widget-root.is-expanded .mindum-widget-typing {
+  margin-left: max(14px, calc((100vw - 768px) / 2));
+}
+
+/* ---------- Drag-to-resize (W2) ---------- */
+.mindum-widget-rz {
+  position: absolute; z-index: 4; touch-action: none;
+  opacity: 0;
+  transition: opacity var(--mw-sm) var(--mw-out), background var(--mw-sm) var(--mw-out);
+}
+.mindum-widget-rz[data-rz="y"] { top: 0; left: 20px; right: 20px; height: 6px; cursor: ns-resize; }
+.mindum-widget-rz[data-rz="x"] { top: 20px; bottom: 0; width: 6px; }
+.mindum-widget-root[data-position="bottom-right"] .mindum-widget-rz[data-rz="x"] { left: 0; cursor: ew-resize; }
+.mindum-widget-root[data-position="bottom-left"]  .mindum-widget-rz[data-rz="x"] { right: 0; cursor: ew-resize; }
+.mindum-widget-rz[data-rz="xy"] { width: 20px; height: 20px; top: 0; }
+.mindum-widget-root[data-position="bottom-right"] .mindum-widget-rz[data-rz="xy"] { left: 0; cursor: nwse-resize; }
+.mindum-widget-root[data-position="bottom-left"]  .mindum-widget-rz[data-rz="xy"] { right: 0; cursor: nesw-resize; }
+.mindum-widget-rz[data-rz="xy"]::before {
+  content: ""; position: absolute; top: 6px; width: 8px; height: 8px;
+  border-top: 2px solid var(--mw-ink-soft);
+}
+.mindum-widget-root[data-position="bottom-right"] .mindum-widget-rz[data-rz="xy"]::before {
+  left: 6px; border-left: 2px solid var(--mw-ink-soft); border-radius: 3px 0 0 0;
+}
+.mindum-widget-root[data-position="bottom-left"] .mindum-widget-rz[data-rz="xy"]::before {
+  right: 6px; border-right: 2px solid var(--mw-ink-soft); border-radius: 0 3px 0 0;
+}
+.mindum-widget-panel:hover .mindum-widget-rz { opacity: 0.45; }
+.mindum-widget-rz:hover { opacity: 0.95; }
+.mindum-widget-panel.is-resizing .mindum-widget-rz[data-rz="y"],
+.mindum-widget-panel.is-resizing .mindum-widget-rz[data-rz="x"] { opacity: 1; background: var(--mw-line-2); }
+.mindum-widget-panel.is-resizing { user-select: none; }
+.mindum-widget-root.is-expanded .mindum-widget-rz { display: none; }
+
+/* ---------- Code copy button + micro-highlighter tokens (W2) ---------- */
+.mindum-widget-pre { position: relative; margin: 0.5em 0 0.2em; }
+.mindum-widget-pre pre { margin: 0; }
+.mindum-widget-copy {
+  position: absolute; top: 7px; right: 7px;
+  border: none; cursor: pointer;
+  background: rgba(255,247,234,0.10);
+  color: #E9E0CF;
+  font-family: inherit; font-size: 11px; font-weight: 500;
+  padding: 4px 8px; border-radius: 7px;
+  opacity: 0;
+  transition: opacity var(--mw-xs) var(--mw-out), background var(--mw-xs) var(--mw-out);
+}
+.mindum-widget-pre:hover .mindum-widget-copy,
+.mindum-widget-copy:focus-visible { opacity: 1; }
+.mindum-widget-copy:hover { background: rgba(255,247,234,0.20); }
+.mindum-widget-copy.is-copied { color: #9FD8A8; }
+.mindum-widget-tok-k { color: #E0922F; }
+.mindum-widget-tok-s { color: #9FD8A8; }
+.mindum-widget-tok-n { color: #E8A87C; }
+.mindum-widget-tok-c { color: #7C7567; font-style: italic; }
+
+/* ---------- Dark mode (W2, W-L2: end-user toggle) ---------- */
+.mindum-widget-root[data-mw-dark="true"] {
+  --mw-cream:   #1A1714;
+  --mw-paper:   #221E18;
+  --mw-paper-2: #2B261E;
+  --mw-ink:     #EDE7DB;
+  --mw-ink-soft:#B6AC9C;
+  --mw-muted:   #857B6E;
+  --mw-accent:      ${accentBright};
+  --mw-accent-deep: ${accent};
+  --mw-accent-soft: ${accentSoftDark};
+  --mw-line:   rgba(255,255,255,0.07);
+  --mw-line-2: rgba(255,255,255,0.13);
+  --mw-green:  #6BB47A;
+  --mw-shadow-bubble: 0 8px 24px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.4);
+  --mw-shadow-panel:  0 24px 60px rgba(0,0,0,0.6), 0 6px 16px rgba(0,0,0,0.45);
+}
+.mindum-widget-root[data-mw-dark="true"] .mindum-widget-confirmation {
+  background: linear-gradient(180deg, #2C2418 0%, #241D13 100%);
+  border-color: rgba(232,154,60,0.4);
+  box-shadow: none;
+}
+.mindum-widget-root[data-mw-dark="true"] .mindum-widget-confirm-title { color: var(--mw-accent); }
+.mindum-widget-root[data-mw-dark="true"] .mindum-widget-confirm-row {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.10);
+}
+.mindum-widget-root[data-mw-dark="true"] .mindum-widget-confirm-name { color: var(--mw-ink); }
+.mindum-widget-root[data-mw-dark="true"] .mindum-widget-confirm-reject {
+  background: transparent;
+  color: #E8C083;
+  border-color: rgba(232,154,60,0.4);
+}
+.mindum-widget-root[data-mw-dark="true"] .mindum-widget-confirm-badge[data-decision="approved"] {
+  background: rgba(107,180,122,0.18); color: #8FD3A0;
+}
+.mindum-widget-root[data-mw-dark="true"] .mindum-widget-confirm-badge[data-decision="rejected"] {
+  background: rgba(255,255,255,0.06); color: var(--mw-muted);
+}
+.mindum-widget-root[data-mw-dark="true"] .mindum-widget-message[data-role="error"] .mindum-widget-bubble-msg {
+  background: #32211C; border-color: #5C3328; color: #E8A18D;
+}
+.mindum-widget-root[data-mw-dark="true"] .mindum-widget-jump {
+  background: var(--mw-paper-2); color: var(--mw-ink);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+}
+
+/* ---------- Narrow viewports: fullscreen panel (W2 / FR-060) ---------- */
+@media (max-width: 480px) {
+  .mindum-widget-panel {
+    position: fixed; inset: 0;
+    width: auto; height: auto;
+    max-width: none; max-height: none;
+    border-radius: 0; margin: 0;
+  }
+  .mindum-widget-expand, .mindum-widget-rz { display: none; }
+  .mindum-widget-footnote { display: none; }
+  .mindum-widget-pre .mindum-widget-copy { opacity: 0.75; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .mindum-widget-root *, .mindum-widget-root *::before, .mindum-widget-root *::after {
