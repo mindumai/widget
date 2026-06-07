@@ -593,9 +593,23 @@ export function buildStyles(theme: ThemeInput): string {
   border-color: var(--mw-accent);
   box-shadow: 0 0 0 3px var(--mw-accent-soft);
 }
-.mindum-widget-input {
+/* Double-class selector + !important on the contested properties: host
+   pages (e.g. Tailwind's forms plugin on Akaunting) style textarea:focus
+   globally with a border + ring, which outranks a single class. The
+   composer wrapper owns the focus affordance — the inner textarea must
+   never paint its own. */
+.mindum-widget-root .mindum-widget-input,
+.mindum-widget-root .mindum-widget-input:focus,
+.mindum-widget-root .mindum-widget-input:focus-visible {
   flex: 1;
-  border: none; background: transparent; outline: none; resize: none;
+  appearance: none;
+  -webkit-appearance: none;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+  border-radius: 0;
+  resize: none;
   font-family: inherit;
   font-size: 14px;
   line-height: 1.45;
