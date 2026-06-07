@@ -2,6 +2,7 @@ import type { PendingToolUse, UiMessage, WidgetConfig } from '../types';
 import { enhanceCodeBlocks } from './highlight';
 import { renderMarkdown } from './markdown';
 import { buildStyles } from './styles';
+import { createReadAloud, createSpeechInput, type ReadAloud, type SpeechInput } from './voice';
 
 /**
  * Vanilla DOM widget. No framework — each method updates the bits of the
@@ -17,6 +18,10 @@ import { buildStyles } from './styles';
  * yanking the scroll mid-read), end-user dark toggle persisted in
  * sessionStorage (W-L2), expand-to-fullscreen, drag-to-resize from the
  * top/side/corner, and code blocks get a copy button + micro-highlighter.
+ *
+ * W3 voice: mic dictation into the composer (SpeechRecognition, hidden
+ * where unsupported) and a read-aloud toggle that speaks each finalized
+ * assistant reply (speechSynthesis). Both in ui/voice.ts.
  */
 export class WidgetUi {
   private root: HTMLDivElement;
@@ -58,6 +63,13 @@ export class WidgetUi {
 
   private promptsEl: HTMLDivElement | null = null;
 
+  private readAloud!: ReadAloud;
+
+  private mic!: SpeechInput;
+
+  /** Assistant bubbles already read aloud (or seen while the toggle was off). */
+  private spoken = new WeakSet<UiMessage>();
+
   private styleEl: HTMLStyleElement | null = null;
 
   constructor(private readonly config: WidgetConfig) {
@@ -77,6 +89,16 @@ export class WidgetUi {
       this.root.dataset.mwDark = 'true';
       this.root.querySelector('.mindum-widget-dark')?.setAttribute('aria-label', 'Switch to light mode');
     }
+
+    this.readAloud = createReadAloud(this.root.querySelector<HTMLButtonElement>('.mindum-widget-speak')!);
+    this.mic = createSpeechInput({
+      button: this.root.querySelector<HTMLButtonElement>('.mindum-widget-mic')!,
+      input: this.input,
+      onChanged: () => {
+        this.autoGrow();
+        this.refreshSend();
+      },
+    });
 
     this.wireEvents();
     this.wireResize();
@@ -184,6 +206,7 @@ export class WidgetUi {
       wrapper.appendChild(bubble);
       this.messagesEl.appendChild(wrapper);
     }
+    this.speakNewAssistantReply(messages);
     // Smart autoscroll (W2): follow the conversation only while the user
     // is at the bottom; otherwise offer the jump pill and leave their
     // scroll position alone.
@@ -202,6 +225,26 @@ export class WidgetUi {
     h.textContent = m.text;
     wrap.appendChild(h);
     return wrap;
+  }
+
+  /**
+   * Read the newest finalized assistant bubble aloud (W3). Marked via a
+   * WeakSet so per-token re-renders and history re-renders never repeat a
+   * reply; messages rendered while the toggle is off are marked too, so
+   * flipping it on only affects future replies. Streaming bubbles wait
+   * for finalize (the persisted text is what gets spoken).
+   */
+  private speakNewAssistantReply(messages: UiMessage[]): void {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role !== 'assistant' || m.welcome) continue;
+      if (m.streaming) return;
+      if (!this.spoken.has(m)) {
+        this.spoken.add(m);
+        this.readAloud.speak(m.text);
+      }
+      return;
+    }
   }
 
   /**
@@ -307,6 +350,7 @@ export class WidgetUi {
     this.loading = loading;
     this.root.classList.toggle('is-loading', loading);
     this.input.disabled = loading;
+    this.mic.setDisabled(loading);
     this.refreshSend();
     this.positionJump();
     if (!loading) this.input.focus();
@@ -537,6 +581,9 @@ export class WidgetUi {
               <svg class="mindum-widget-ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
               <svg class="mindum-widget-ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line><line x1="4.9" y1="4.9" x2="6.8" y2="6.8"></line><line x1="17.2" y1="17.2" x2="19.1" y2="19.1"></line><line x1="4.9" y1="19.1" x2="6.8" y2="17.2"></line><line x1="17.2" y1="6.8" x2="19.1" y2="4.9"></line></svg>
             </button>
+            <button type="button" class="mindum-widget-speak" aria-label="Read answers aloud" aria-pressed="false" title="Read answers aloud: off">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+            </button>
             <button type="button" class="mindum-widget-expand" aria-label="Expand" title="Expand">
               <svg class="mindum-widget-ic-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
               <svg class="mindum-widget-ic-contract" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
@@ -566,6 +613,9 @@ export class WidgetUi {
         <form class="mindum-widget-form">
           <div class="mindum-widget-composer">
             <textarea class="mindum-widget-input" rows="1" placeholder="Ask anything…" aria-label="Message"></textarea>
+            <button type="button" class="mindum-widget-mic" aria-label="Speak" title="Speak (voice input)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+            </button>
             <button type="submit" class="mindum-widget-send" aria-label="Send" disabled>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             </button>

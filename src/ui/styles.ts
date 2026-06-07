@@ -674,6 +674,37 @@ export function buildStyles(primary: string): string {
   .mindum-widget-pre .mindum-widget-copy { opacity: 0.75; }
 }
 
+/* ---------- Voice (W3) ---------- */
+.mindum-widget-speak {
+  border: none; background: transparent; cursor: pointer; color: var(--mw-ink-soft);
+  width: 30px; height: 30px; border-radius: 8px;
+  display: grid; place-items: center; padding: 0;
+  transition: background var(--mw-xs) var(--mw-out), color var(--mw-xs) var(--mw-out), transform var(--mw-xs) var(--mw-out);
+}
+.mindum-widget-speak:hover { background: var(--mw-paper-2); color: var(--mw-ink); }
+.mindum-widget-speak:active { transform: scale(0.9); }
+.mindum-widget-speak svg { width: 16px; height: 16px; }
+.mindum-widget-speak.is-on { background: var(--mw-accent-soft); color: var(--mw-accent-deep); }
+.mindum-widget-mic {
+  flex: none;
+  width: 36px; height: 36px;
+  border: none; border-radius: 12px; cursor: pointer;
+  background: transparent; color: var(--mw-ink-soft);
+  display: grid; place-items: center;
+  transition: background var(--mw-xs) var(--mw-out), color var(--mw-xs) var(--mw-out), transform var(--mw-xs) var(--mw-out);
+}
+.mindum-widget-mic:hover:not(:disabled) { background: var(--mw-paper-2); color: var(--mw-ink); }
+.mindum-widget-mic:active:not(:disabled) { transform: scale(0.9); }
+.mindum-widget-mic:disabled { opacity: 0.4; cursor: default; }
+.mindum-widget-mic svg { width: 18px; height: 18px; }
+.mindum-widget-mic.is-listening {
+  background: var(--mw-accent);
+  color: var(--mw-on-accent);
+  animation: mindum-miclive 1.3s var(--mw-inout) infinite;
+}
+@keyframes mindum-miclive { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+.mindum-widget-mic.is-blocked { color: #C25438; }
+
 @media (prefers-reduced-motion: reduce) {
   .mindum-widget-root *, .mindum-widget-root *::before, .mindum-widget-root *::after {
     animation-duration: 0.001ms !important;
