@@ -44,35 +44,160 @@ function tint(rgb: [number, number, number], k: number): [number, number, number
   ];
 }
 
-export function buildStyles(primary: string): string {
-  const rgb = hexToRgb(primary) ?? hexToRgb(DEFAULT_PRIMARY)!;
-  const accent = rgbToHex(rgb);
-  const accentDeep = rgbToHex(darken(rgb, 0.18));
-  const accentSoft = rgbToHex(tint(rgb, 0.87));
-  const accentGlowA = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.40)`;
-  const accentGlowB = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0)`;
-  const rgbBright = tint(rgb, 0.15);
-  const accentBright = rgbToHex(rgbBright);
-  const accentSoftDark = `rgba(${rgbBright[0]},${rgbBright[1]},${rgbBright[2]},0.16)`;
+/** The theme fields the widget can apply (mint `theme` block ∪ SDK config). */
+export interface ThemeInput {
+  primary?: string | null;
+  preset?: string | null;
+  bg?: string | null;
+  radius?: number | null;
+  font?: string | null;
+}
+
+interface Palette {
+  cream: string;
+  paper: string;
+  paper2: string;
+  ink: string;
+  inkSoft: string;
+  muted: string;
+  accent: string;
+  accentDeep: string;
+  accentSoft: string;
+  onAccent: string;
+  line: string;
+  line2: string;
+  green: string;
+}
+
+/**
+ * W5 tone presets (W-L3) — one light + one dark palette per tone, ported
+ * from the four widget-mockups. `serifWelcome` keeps the serif heading a
+ * warm-preset signature; the other tones use their body font for it.
+ * Customer `primary` overrides the accent trio in both modes (W-L4).
+ */
+const PRESETS: Record<string, { light: Palette; dark: Palette; serifWelcome: boolean }> = {
+  warm: {
+    serifWelcome: true,
+    light: {
+      cream: '#FAF6EF', paper: '#FFFDF9', paper2: '#F4EEE3',
+      ink: '#2A251E', inkSoft: '#5C544A', muted: '#9A9085',
+      accent: '#D97706', accentDeep: '#B26205', accentSoft: '#FAEDDF', onAccent: '#FFF8EC',
+      line: 'rgba(42,37,30,0.08)', line2: 'rgba(42,37,30,0.14)', green: '#4F8A5B',
+    },
+    dark: {
+      cream: '#1A1714', paper: '#221E18', paper2: '#2B261E',
+      ink: '#EDE7DB', inkSoft: '#B6AC9C', muted: '#857B6E',
+      accent: '#E89A3C', accentDeep: '#D9821C', accentSoft: 'rgba(232,154,60,0.16)', onAccent: '#FFF8EC',
+      line: 'rgba(255,255,255,0.07)', line2: 'rgba(255,255,255,0.13)', green: '#6BB47A',
+    },
+  },
+  coral: {
+    serifWelcome: false,
+    light: {
+      cream: '#FFF8F2', paper: '#FFFFFF', paper2: '#FBEEE6',
+      ink: '#3D2B22', inkSoft: '#7A5E50', muted: '#B39A8B',
+      accent: '#EC6F4C', accentDeep: '#D2502C', accentSoft: '#FCE7DD', onAccent: '#FFF8F2',
+      line: 'rgba(61,43,34,0.08)', line2: 'rgba(61,43,34,0.14)', green: '#5BA86B',
+    },
+    dark: {
+      cream: '#211A16', paper: '#2A211B', paper2: '#332820',
+      ink: '#F1E7DF', inkSoft: '#C2B2A6', muted: '#8E8073',
+      accent: '#F2825F', accentDeep: '#E0613B', accentSoft: 'rgba(242,130,95,0.16)', onAccent: '#FFF8F2',
+      line: 'rgba(255,255,255,0.07)', line2: 'rgba(255,255,255,0.13)', green: '#6BB47A',
+    },
+  },
+  playful: {
+    serifWelcome: false,
+    light: {
+      cream: '#FFFFFF', paper: '#FFFFFF', paper2: '#FFF0F2',
+      ink: '#241E33', inkSoft: '#5C5470', muted: '#A39DB5',
+      accent: '#FF4D79', accentDeep: '#E8265A', accentSoft: '#FFE3EA', onAccent: '#FFFFFF',
+      line: 'rgba(36,30,51,0.08)', line2: 'rgba(36,30,51,0.13)', green: '#0CA694',
+    },
+    dark: {
+      cream: '#1B1626', paper: '#241C30', paper2: '#2B2240',
+      ink: '#F0ECF7', inkSoft: '#B6AECB', muted: '#7E7799',
+      accent: '#FF5D86', accentDeep: '#F23A6A', accentSoft: 'rgba(255,93,134,0.16)', onAccent: '#FFFFFF',
+      line: 'rgba(255,255,255,0.08)', line2: 'rgba(255,255,255,0.14)', green: '#14B3A1',
+    },
+  },
+  minimal: {
+    serifWelcome: false,
+    light: {
+      cream: '#FFFFFF', paper: '#F7F7F8', paper2: '#EFEFF1',
+      ink: '#16161A', inkSoft: '#5A5A63', muted: '#9A9AA2',
+      accent: '#3B6FE0', accentDeep: '#2D5BD0', accentSoft: '#E4EBFB', onAccent: '#FFFFFF',
+      line: 'rgba(16,16,20,0.09)', line2: 'rgba(16,16,20,0.15)', green: '#3E9B63',
+    },
+    dark: {
+      cream: '#161618', paper: '#1C1C1F', paper2: '#232327',
+      ink: '#EDEDEF', inkSoft: '#A6A6AD', muted: '#6B6B73',
+      accent: '#7EA6FF', accentDeep: '#5B86E8', accentSoft: 'rgba(126,166,255,0.14)', onAccent: '#161618',
+      line: 'rgba(255,255,255,0.08)', line2: 'rgba(255,255,255,0.14)', green: '#5FD08A',
+    },
+  },
+};
+
+const SERIF_STACK = 'Georgia, "Iowan Old Style", "Times New Roman", serif';
+const MONO_STACK = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const SANS_STACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
+function fontStack(font: string | null | undefined): string {
+  if (font === 'serif') return SERIF_STACK;
+  if (font === 'mono') return MONO_STACK;
+  return SANS_STACK;
+}
+
+export function buildStyles(theme: ThemeInput): string {
+  const preset = PRESETS[theme.preset ?? ''] ?? PRESETS.warm;
+  const light: Palette = { ...preset.light };
+  const dark: Palette = { ...preset.dark };
+
+  // Customer primary overrides the preset's accent trio in both modes
+  // (W-L4 precedence). Derivations match the pre-W5 single-primary math.
+  const rgb = theme.primary ? hexToRgb(theme.primary) : null;
+  if (rgb) {
+    light.accent = rgbToHex(rgb);
+    light.accentDeep = rgbToHex(darken(rgb, 0.18));
+    light.accentSoft = rgbToHex(tint(rgb, 0.87));
+    const rgbBright = tint(rgb, 0.15);
+    dark.accent = rgbToHex(rgbBright);
+    dark.accentDeep = rgbToHex(rgb);
+    dark.accentSoft = `rgba(${rgbBright[0]},${rgbBright[1]},${rgbBright[2]},0.16)`;
+  }
+
+  // Customer background override recolors the light panel surface only —
+  // the dark bundle keeps the preset's own dark surface.
+  if (theme.bg && hexToRgb(theme.bg)) {
+    light.cream = theme.bg;
+  }
+
+  const glowRgb = hexToRgb(light.accent) ?? hexToRgb(DEFAULT_PRIMARY)!;
+  const accentGlowA = `rgba(${glowRgb[0]},${glowRgb[1]},${glowRgb[2]},0.40)`;
+  const accentGlowB = `rgba(${glowRgb[0]},${glowRgb[1]},${glowRgb[2]},0)`;
+
+  const radius = Math.max(0, Math.min(24, theme.radius ?? 20));
+  const bodyFont = fontStack(theme.font);
+  const welcomeFont = preset.serifWelcome ? SERIF_STACK : bodyFont;
 
   return `
 .mindum-widget-root {
-  /* -- palette ("warm" default; W5 presets re-bundle these) -- */
-  --mw-cream:   #FAF6EF;
-  --mw-paper:   #FFFDF9;
-  --mw-paper-2: #F4EEE3;
-  --mw-ink:     #2A251E;
-  --mw-ink-soft:#5C544A;
-  --mw-muted:   #9A9085;
-  --mw-accent:      ${accent};
-  --mw-accent-deep: ${accentDeep};
-  --mw-accent-soft: ${accentSoft};
-  --mw-on-accent:   #FFF8EC;
-  --mw-line:   rgba(42,37,30,0.08);
-  --mw-line-2: rgba(42,37,30,0.14);
-  --mw-green:  #4F8A5B;
-  --mw-serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
-  --mw-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* -- palette (preset light bundle + customer overrides, W5) -- */
+  --mw-cream:   ${light.cream};
+  --mw-paper:   ${light.paper};
+  --mw-paper-2: ${light.paper2};
+  --mw-ink:     ${light.ink};
+  --mw-ink-soft:${light.inkSoft};
+  --mw-muted:   ${light.muted};
+  --mw-accent:      ${light.accent};
+  --mw-accent-deep: ${light.accentDeep};
+  --mw-accent-soft: ${light.accentSoft};
+  --mw-on-accent:   ${light.onAccent};
+  --mw-line:   ${light.line};
+  --mw-line-2: ${light.line2};
+  --mw-green:  ${light.green};
+  --mw-serif: ${welcomeFont};
+  --mw-mono: ${MONO_STACK};
   /* -- motion -- */
   --mw-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --mw-out:    cubic-bezier(0.22, 1, 0.36, 1);
@@ -85,7 +210,7 @@ export function buildStyles(primary: string): string {
   z-index: 2147483000;
   display: flex;
   flex-direction: column;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: ${bodyFont};
   color: var(--mw-ink);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -139,7 +264,7 @@ export function buildStyles(primary: string): string {
   margin-bottom: 14px;
   background: var(--mw-cream);
   border: 1px solid var(--mw-line-2);
-  border-radius: 20px;
+  border-radius: ${radius}px;
   box-shadow: var(--mw-shadow-panel);
   opacity: 0; transform: translateY(14px) scale(0.96);
   pointer-events: none;
@@ -616,18 +741,19 @@ export function buildStyles(primary: string): string {
 
 /* ---------- Dark mode (W2, W-L2: end-user toggle) ---------- */
 .mindum-widget-root[data-mw-dark="true"] {
-  --mw-cream:   #1A1714;
-  --mw-paper:   #221E18;
-  --mw-paper-2: #2B261E;
-  --mw-ink:     #EDE7DB;
-  --mw-ink-soft:#B6AC9C;
-  --mw-muted:   #857B6E;
-  --mw-accent:      ${accentBright};
-  --mw-accent-deep: ${accent};
-  --mw-accent-soft: ${accentSoftDark};
-  --mw-line:   rgba(255,255,255,0.07);
-  --mw-line-2: rgba(255,255,255,0.13);
-  --mw-green:  #6BB47A;
+  --mw-cream:   ${dark.cream};
+  --mw-paper:   ${dark.paper};
+  --mw-paper-2: ${dark.paper2};
+  --mw-ink:     ${dark.ink};
+  --mw-ink-soft:${dark.inkSoft};
+  --mw-muted:   ${dark.muted};
+  --mw-accent:      ${dark.accent};
+  --mw-accent-deep: ${dark.accentDeep};
+  --mw-accent-soft: ${dark.accentSoft};
+  --mw-on-accent:   ${dark.onAccent};
+  --mw-line:   ${dark.line};
+  --mw-line-2: ${dark.line2};
+  --mw-green:  ${dark.green};
   --mw-shadow-bubble: 0 8px 24px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.4);
   --mw-shadow-panel:  0 24px 60px rgba(0,0,0,0.6), 0 6px 16px rgba(0,0,0,0.45);
 }
@@ -673,6 +799,15 @@ export function buildStyles(primary: string): string {
   .mindum-widget-footnote { display: none; }
   .mindum-widget-pre .mindum-widget-copy { opacity: 0.75; }
 }
+
+/* ---------- Customer logo / launcher icon (W5, FR-062) ---------- */
+.mindum-widget-head-avatar.has-img { background: var(--mw-paper-2); }
+.mindum-widget-head-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
+.mindum-widget-bubble-img {
+  width: 30px; height: 30px; border-radius: 50%; object-fit: cover; display: block;
+  transition: transform var(--mw-md) var(--mw-spring), opacity var(--mw-sm) var(--mw-out);
+}
+.mindum-widget-root.is-open .mindum-widget-bubble .mindum-widget-bubble-img { opacity: 0; transform: rotate(90deg) scale(0.6); }
 
 /* ---------- Send → Stop morph (W4) ---------- */
 .mindum-widget-send .mindum-widget-ic-stop { display: none; }

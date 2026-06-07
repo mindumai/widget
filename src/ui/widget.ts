@@ -1,7 +1,7 @@
 import type { PendingToolUse, UiMessage, WidgetConfig } from '../types';
 import { enhanceCodeBlocks } from './highlight';
 import { renderMarkdown } from './markdown';
-import { buildStyles } from './styles';
+import { buildStyles, type ThemeInput } from './styles';
 import { createReadAloud, createSpeechInput, type ReadAloud, type SpeechInput } from './voice';
 
 /**
@@ -27,6 +27,10 @@ import { createReadAloud, createSpeechInput, type ReadAloud, type SpeechInput } 
  * button (square icon, ink background). Clicking it fires onStop — the
  * bootstrap POSTs /api/widget/chat/stop and the orchestrator finalizes
  * the turn as 'cancelled'.
+ *
+ * W5 presets: updateTheme() applies the full dashboard theme block —
+ * tone preset, primary/bg/radius/font overrides, customer logo in the
+ * header and a custom launcher icon. Palette bundles live in styles.ts.
  */
 export class WidgetUi {
   private root: HTMLDivElement;
@@ -78,6 +82,9 @@ export class WidgetUi {
   private spoken = new WeakSet<UiMessage>();
 
   private styleEl: HTMLStyleElement | null = null;
+
+  /** Merged theme across injectStyles + every updateTheme call (W5). */
+  private appliedTheme: ThemeInput = {};
 
   constructor(private readonly config: WidgetConfig) {
     this.injectStyles();
@@ -660,19 +667,77 @@ export class WidgetUi {
   }
 
   /**
-   * Re-style the widget after construction (Phase 3C.4). Lets the bootstrap
-   * apply a dashboard-set primary color and/or position once the mint
-   * response lands, without re-rendering the whole tree.
+   * Re-style the widget after construction (Phase 3C.4, extended by W5).
+   * Lets the bootstrap apply the dashboard's full theme block once the
+   * mint response lands, without re-rendering the whole tree. Null/
+   * undefined fields mean "no override" — the merged appliedTheme keeps
+   * whatever was set before (SDK config primary, earlier mint).
    */
-  updateTheme(theme: { primary?: string | null; position?: 'bottom-right' | 'bottom-left' | null }): void {
-    if (theme.primary && this.styleEl) {
+  updateTheme(theme: {
+    primary?: string | null;
+    position?: 'bottom-right' | 'bottom-left' | null;
+    preset?: string | null;
+    bg?: string | null;
+    radius?: number | null;
+    font?: string | null;
+    logo_url?: string | null;
+    icon_url?: string | null;
+  }): void {
+    let restyle = false;
+    if (theme.primary != null) {
+      this.appliedTheme.primary = theme.primary;
       this.config.theme = { ...this.config.theme, primary: theme.primary };
-      this.styleEl.textContent = buildStyles(theme.primary);
+      restyle = true;
+    }
+    if (theme.preset != null) {
+      this.appliedTheme.preset = theme.preset;
+      restyle = true;
+    }
+    if (theme.bg != null) {
+      this.appliedTheme.bg = theme.bg;
+      restyle = true;
+    }
+    if (theme.radius != null) {
+      this.appliedTheme.radius = theme.radius;
+      restyle = true;
+    }
+    if (theme.font != null) {
+      this.appliedTheme.font = theme.font;
+      restyle = true;
+    }
+    if (restyle && this.styleEl) {
+      this.styleEl.textContent = buildStyles(this.appliedTheme);
     }
     if (theme.position) {
       this.config.position = theme.position;
       this.root.dataset.position = theme.position;
     }
+    if (theme.logo_url) this.applyHeaderLogo(theme.logo_url);
+    if (theme.icon_url) this.applyLauncherIcon(theme.icon_url);
+  }
+
+  /** Swap the sparkle avatar for the customer's logo (W5 / FR-062). */
+  private applyHeaderLogo(url: string): void {
+    const avatar = this.root.querySelector<HTMLDivElement>('.mindum-widget-head-avatar');
+    if (!avatar) return;
+    avatar.classList.add('has-img');
+    avatar.innerHTML = '';
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = url;
+    avatar.appendChild(img);
+  }
+
+  /** Swap the launcher sparkle for the customer's bubble icon (W5 / FR-062). */
+  private applyLauncherIcon(url: string): void {
+    const bubble = this.root.querySelector<HTMLButtonElement>('.mindum-widget-bubble');
+    const chatIcon = bubble?.querySelector<SVGElement>('.mindum-widget-ic-chat');
+    if (!bubble || !chatIcon) return;
+    const img = document.createElement('img');
+    img.alt = '';
+    img.className = 'mindum-widget-bubble-img';
+    img.src = url;
+    chatIcon.replaceWith(img);
   }
 
   private injectStyles(): void {
@@ -683,10 +748,12 @@ export class WidgetUi {
     }
     const style = document.createElement('style');
     style.id = 'mindum-widget-styles';
-    // Fallback aligns with the dashboard's warm-amber default (Phase 3A.2 /
-    // FR-062). Customer SDKs that don't ship a custom primary color, and
-    // accounts that haven't touched the theming editor, both render amber.
-    style.textContent = buildStyles(this.config.theme.primary ?? '#d97706');
+    // Fallback aligns with the dashboard's warm default (Phase 3A.2 /
+    // FR-062 / W5). Customer SDKs that don't ship a custom primary, and
+    // accounts that haven't touched the theming editor, both render the
+    // warm preset with the brand-amber accent.
+    this.appliedTheme = { primary: this.config.theme.primary ?? null };
+    style.textContent = buildStyles(this.appliedTheme);
     document.head.appendChild(style);
     this.styleEl = style;
   }

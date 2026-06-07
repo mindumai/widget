@@ -47,6 +47,8 @@ export interface ReverbClientConfig {
  * uses its built-in defaults. Individual keys may be null when unset.
  */
 export interface MintedTheme {
+  /** W5 tone preset baked into the widget: 'warm' | 'coral' | 'playful' | 'minimal'. */
+  preset: string | null;
   primary: string | null;
   position: 'bottom-right' | 'bottom-left' | null;
   bg: string | null;

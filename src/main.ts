@@ -89,10 +89,8 @@ function bootstrap(): void {
       });
 
       if (tok.theme) {
-        ui.updateTheme({
-          primary: tok.theme.primary,
-          position: tok.theme.position,
-        });
+        // W5: the full theme block — preset, granular overrides, assets.
+        ui.updateTheme(tok.theme);
       }
       if (tok.welcome) {
         if (typeof tok.welcome.message === 'string') {
