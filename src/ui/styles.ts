@@ -91,6 +91,24 @@ const PRESETS: Record<string, { light: Palette; dark: Palette; serifWelcome: boo
       line: 'rgba(255,255,255,0.07)', line2: 'rgba(255,255,255,0.13)', green: '#6BB47A',
     },
   },
+  // Mindum house style — mirrors the marketing site: warm amber by day,
+  // teal by night. Opt-in (customers still default to `warm`); used for
+  // Mindum's own demo and any customer who wants the Mindum look.
+  mindum: {
+    serifWelcome: true,
+    light: {
+      cream: '#FDFCF9', paper: '#FFFFFF', paper2: '#F6EFE3',
+      ink: '#1C1917', inkSoft: '#57534E', muted: '#8A837B',
+      accent: '#D97706', accentDeep: '#C06605', accentSoft: '#FDF0DB', onAccent: '#FFFFFF',
+      line: 'rgba(28,25,23,0.08)', line2: 'rgba(28,25,23,0.14)', green: '#65A30D',
+    },
+    dark: {
+      cream: '#0B1A18', paper: '#12211F', paper2: '#0F211E',
+      ink: '#EAFAF5', inkSoft: '#A7C2BC', muted: '#6F8D86',
+      accent: '#2DD4BF', accentDeep: '#26B6A4', accentSoft: 'rgba(45,212,191,0.16)', onAccent: '#04231E',
+      line: 'rgba(255,255,255,0.07)', line2: 'rgba(255,255,255,0.13)', green: '#34D399',
+    },
+  },
   coral: {
     serifWelcome: false,
     light: {
