@@ -22,6 +22,7 @@ export async function getToken(opts: {
   tokenEndpoint: string;
   sessionId: string;
   endUserId: string | null;
+  agent: string | null;
 }): Promise<MintedToken> {
   if (cached && cached.expires_at * 1000 - Date.now() > REFRESH_BUFFER_MS) {
     return cached;
@@ -46,10 +47,16 @@ async function mint(opts: {
   tokenEndpoint: string;
   sessionId: string;
   endUserId: string | null;
+  agent: string | null;
 }): Promise<MintedToken> {
   const body: Record<string, string> = { session_id: opts.sessionId };
   if (opts.endUserId) {
     body.end_user_id = opts.endUserId;
+  }
+  // Scoped Agents (AG5) — the orchestrator resolves the slug or degrades
+  // to the default widget; the widget never hard-fails on a bad slug.
+  if (opts.agent) {
+    body.agent = opts.agent;
   }
 
   const res = await fetch(opts.tokenEndpoint, {
@@ -88,6 +95,7 @@ async function mint(opts: {
     // the widget bootstrap applies precedence (SDK Blade attrs > mint > defaults).
     theme: payload.theme ?? null,
     welcome: payload.welcome ?? null,
+    agent: payload.agent ?? null,
   };
 }
 

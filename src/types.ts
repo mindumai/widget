@@ -10,6 +10,12 @@ export interface WidgetConfig {
   sessionId: string;
   /** Optional end-user identifier the customer's app resolved from its own auth layer. */
   endUserId: string | null;
+  /**
+   * Scoped Agents — slug of the page's agent from <x-mindum::widget agent="…" />.
+   * Sent with every mint; the orchestrator resolves it (or degrades to the
+   * default widget on unknown/disabled slugs). Null = default widget.
+   */
+  agent: string | null;
   /** Same-origin URL the SDK exposes to mint short-lived JWTs. */
   tokenEndpoint: string;
   /** Orchestrator API base URL — chat POSTs go here. */
@@ -68,6 +74,12 @@ export interface MintedWelcome {
   prompts: string[];
 }
 
+/** Scoped-agent identity for the panel header (AG5). Display fields only. */
+export interface MintedAgent {
+  name: string;
+  slug: string;
+}
+
 /** Token response from POST {tokenEndpoint}. */
 export interface MintedToken {
   token: string;
@@ -77,6 +89,8 @@ export interface MintedToken {
   theme: MintedTheme | null;
   /** Dashboard-set welcome content; null if the customer hasn't used the editor. */
   welcome: MintedWelcome | null;
+  /** Resolved scoped agent; null on the default widget or when the slug degraded. */
+  agent: MintedAgent | null;
 }
 
 /** A single text content block as Anthropic returns it. */

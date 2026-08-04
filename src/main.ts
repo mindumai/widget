@@ -86,11 +86,17 @@ function bootstrap(): void {
         tokenEndpoint: config.tokenEndpoint,
         sessionId: config.sessionId,
         endUserId: config.endUserId,
+        agent: config.agent,
       });
 
       if (tok.theme) {
         // W5: the full theme block — preset, granular overrides, assets.
         ui.updateTheme(tok.theme);
+      }
+      if (tok.agent) {
+        // AG5: scoped-agent identity — the panel header shows the agent's
+        // name so a "Refund Helper" feels distinct from "Order Tracker".
+        ui.setAgentTitle(tok.agent.name);
       }
       if (tok.welcome) {
         if (typeof tok.welcome.message === 'string') {
@@ -149,6 +155,7 @@ function bootstrap(): void {
           tokenEndpoint: config.tokenEndpoint,
           sessionId: config.sessionId,
           endUserId: config.endUserId,
+          agent: config.agent,
         });
         await postStop({ apiUrl: config.apiUrl, token: tok.token });
       } catch {
@@ -181,6 +188,7 @@ function bootstrap(): void {
         tokenEndpoint: config.tokenEndpoint,
         sessionId: config.sessionId,
         endUserId: config.endUserId,
+        agent: config.agent,
       });
 
       // Lazy-open WS if onPanelFirstOpen didn't fire (rare — usually it
@@ -365,6 +373,7 @@ function bootstrap(): void {
         tokenEndpoint: config.tokenEndpoint,
         sessionId: config.sessionId,
         endUserId: config.endUserId,
+        agent: config.agent,
       });
       await postConfirm({
         apiUrl: config.apiUrl,
@@ -514,9 +523,11 @@ function readConfig(): WidgetConfig | null {
   const raw = window.__MINDUM_WIDGET__;
   if (!raw) return null;
   const rawWelcome = (raw as { welcome?: { message?: string; prompts?: string[] } }).welcome;
+  const rawAgent = (raw as { agent?: unknown }).agent;
   return {
     sessionId: raw.sessionId ?? '',
     endUserId: raw.endUserId ?? null,
+    agent: typeof rawAgent === 'string' && rawAgent.trim() !== '' ? rawAgent.trim() : null,
     tokenEndpoint: raw.tokenEndpoint ?? '/mindum/widget/token',
     apiUrl: raw.apiUrl ?? '',
     wsUrl: raw.wsUrl ?? '',

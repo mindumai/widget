@@ -667,6 +667,20 @@ export class WidgetUi {
   }
 
   /**
+   * AG5 (Scoped Agents) — retitle the panel header with the resolved
+   * agent's display name once the mint response lands. textContent only:
+   * the name is customer-authored data, never markup.
+   */
+  setAgentTitle(name: string): void {
+    const trimmed = name.trim();
+    if (trimmed === '') return;
+    const title = this.root.querySelector('.mindum-widget-head-title');
+    if (title) title.textContent = trimmed;
+    const panel = this.root.querySelector('.mindum-widget-panel');
+    if (panel) panel.setAttribute('aria-label', `${trimmed} chat`);
+  }
+
+  /**
    * Re-style the widget after construction (Phase 3C.4, extended by W5).
    * Lets the bootstrap apply the dashboard's full theme block once the
    * mint response lands, without re-rendering the whole tree. Null/
