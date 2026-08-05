@@ -491,16 +491,81 @@ export function buildStyles(theme: ThemeInput): string {
   border-bottom-left-radius: 5px;
 }
 
-/* markdown content */
-.mindum-widget-bubble-msg > *:first-child { margin-top: 0; }
-.mindum-widget-bubble-msg > *:last-child { margin-bottom: 0; }
-.mindum-widget-bubble-msg p { margin: 0 0 0.55em; }
+/* markdown content (W7 hardening pass)
+   The bubble's own pre-wrap is for plain text; rendered markdown flips
+   to normal whitespace via .is-md — otherwise marked's inter-tag
+   newlines paint as huge gaps around lists/paragraphs. Every allowed
+   tag gets explicit margins + typography with !important on the
+   host-bleed-prone properties, because these are bare ul/li/a/h* tags
+   inside the customer's page and Tailwind preflight / theme CSS
+   otherwise restyles them (the demo-app showed inflated list gaps and
+   drifting fonts before this). */
+.mindum-widget-bubble-msg.is-md { white-space: normal; }
+.mindum-widget-bubble-msg > *:first-child { margin-top: 0 !important; }
+.mindum-widget-bubble-msg > *:last-child { margin-bottom: 0 !important; }
+.mindum-widget-bubble-msg p { margin: 0 0 0.55em; font: inherit; }
 .mindum-widget-bubble-msg p:last-child { margin-bottom: 0; }
-.mindum-widget-bubble-msg ul, .mindum-widget-bubble-msg ol { margin: 0.4em 0; padding-left: 1.35em; }
-.mindum-widget-bubble-msg li { margin: 0.18em 0; }
-.mindum-widget-bubble-msg strong { font-weight: 600; }
-.mindum-widget-bubble-msg a { color: var(--mw-accent-deep); text-decoration: underline; text-underline-offset: 2px; }
-.mindum-widget-message[data-role="user"] .mindum-widget-bubble-msg a { color: inherit; }
+.mindum-widget-bubble-msg ul, .mindum-widget-bubble-msg ol {
+  margin: 0.4em 0 !important;
+  padding: 0 0 0 1.35em !important;
+}
+.mindum-widget-bubble-msg ul { list-style: disc outside; }
+.mindum-widget-bubble-msg ol { list-style: decimal outside; }
+.mindum-widget-bubble-msg li {
+  margin: 0.18em 0 !important;
+  padding: 0 !important;
+  font: inherit;
+  line-height: 1.55;
+}
+/* Loose lists (blank lines between items) render as <li><p>…</p></li>;
+   the paragraph's own margin would double the gap. */
+.mindum-widget-bubble-msg li > p { margin: 0 !important; }
+.mindum-widget-bubble-msg h1, .mindum-widget-bubble-msg h2, .mindum-widget-bubble-msg h3,
+.mindum-widget-bubble-msg h4, .mindum-widget-bubble-msg h5, .mindum-widget-bubble-msg h6 {
+  margin: 0.7em 0 0.3em !important;
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.3;
+  color: inherit;
+}
+.mindum-widget-bubble-msg h1 { font-size: 1.15em; }
+.mindum-widget-bubble-msg h2 { font-size: 1.1em; }
+.mindum-widget-bubble-msg h3, .mindum-widget-bubble-msg h4,
+.mindum-widget-bubble-msg h5, .mindum-widget-bubble-msg h6 { font-size: 1.02em; }
+.mindum-widget-bubble-msg blockquote {
+  margin: 0.5em 0 !important;
+  padding: 0.1em 0 0.1em 0.8em !important;
+  border-left: 3px solid var(--mw-line-2);
+  color: var(--mw-ink-soft);
+}
+.mindum-widget-bubble-msg table {
+  border-collapse: collapse;
+  margin: 0.5em 0 !important;
+  font-size: 0.95em;
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+.mindum-widget-bubble-msg th, .mindum-widget-bubble-msg td {
+  border: 1px solid var(--mw-line-2);
+  padding: 4px 9px !important;
+  text-align: left;
+  font: inherit;
+}
+.mindum-widget-bubble-msg th { font-weight: 600; background: var(--mw-paper-2); }
+.mindum-widget-bubble-msg hr {
+  border: none;
+  border-top: 1px solid var(--mw-line-2);
+  margin: 0.7em 0 !important;
+}
+.mindum-widget-bubble-msg strong, .mindum-widget-bubble-msg b { font-weight: 600; }
+.mindum-widget-bubble-msg a {
+  color: var(--mw-accent-deep) !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font: inherit;
+}
+.mindum-widget-message[data-role="user"] .mindum-widget-bubble-msg a { color: inherit !important; }
 .mindum-widget-bubble-msg code {
   background: var(--mw-paper-2);
   padding: 0.1em 0.4em;

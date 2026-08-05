@@ -324,6 +324,11 @@ export class WidgetUi {
         // Streaming partial text stays as plain text until the assistant
         // bubble finalizes — partial markdown like "**foo" renders weirdly,
         // and the cost of re-running marked on every delta isn't worth it.
+        //
+        // W7: is-md flips white-space back to normal — the bubble's
+        // pre-wrap is for plain text; on rendered HTML it turns marked's
+        // inter-tag newlines into huge visible gaps around lists.
+        bubble.classList.add('is-md');
         bubble.innerHTML = renderMarkdown(m.text);
         enhanceCodeBlocks(bubble);
       } else {
