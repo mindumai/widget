@@ -329,8 +329,16 @@ export function buildStyles(theme: ThemeInput): string {
   width: 100%;
   max-width: 340px;
   margin: 0 auto;
+  /* Center the single-line pill vertically (the panel composer bottom-
+     aligns for multi-line growth, which reads as a top gap here). */
+  align-items: center;
   transition: max-width var(--mw-md) var(--mw-out), border-color var(--mw-sm) var(--mw-out), box-shadow var(--mw-sm) var(--mw-out);
 }
+/* Fin pattern: the mic only appears once the visitor engages the pill
+   (focus) or the panel is open — the resting pill stays minimal. */
+.mindum-widget-root.is-pill .mindum-widget-mic { display: none; }
+.mindum-widget-root.is-pill .mindum-widget-composer.is-focus .mindum-widget-mic,
+.mindum-widget-root.is-pill.is-open .mindum-widget-mic { display: grid; }
 .mindum-widget-root.is-pill .mindum-widget-composer.is-focus,
 .mindum-widget-root.is-pill.is-open .mindum-widget-composer {
   max-width: 100%;
