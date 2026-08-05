@@ -95,6 +95,9 @@ export class WidgetUi {
   /** Timer for the pill's animated typing placeholder. */
   private phTimer: number | null = null;
 
+  /** True after the first message this session — retires the pill chips. */
+  private hasChatted = false;
+
   constructor(private readonly config: WidgetConfig) {
     this.injectStyles();
     this.root = this.buildRoot();
@@ -150,6 +153,11 @@ export class WidgetUi {
       if (!bar) {
         bar = document.createElement('div');
         bar.className = 'mindum-widget-pillbar';
+        // Starter-question chips float above the pill on focus (Fin
+        // pattern) — populated lazily so post-mint welcome prompts land.
+        const chips = document.createElement('div');
+        chips.className = 'mindum-widget-pill-chips';
+        bar.appendChild(chips);
         this.root.appendChild(bar);
       }
       bar.appendChild(this.form);
@@ -226,6 +234,47 @@ export class WidgetUi {
     }
   }
 
+  /**
+   * Fin-style starter questions floating above the focused pill.
+   * Shown only before the first message of the session — once the
+   * visitor has chatted, the panel's own history is the context.
+   * pointerdown (not click) so the chip fires before the input's blur
+   * hides the strip.
+   */
+  private showPillChips(): void {
+    const chips = this.root.querySelector<HTMLDivElement>('.mindum-widget-pill-chips');
+    if (!chips) return;
+    const prompts = this.config.welcome.prompts.slice(0, 3);
+    if (
+      this.launcher !== 'pill' ||
+      this.root.classList.contains('is-open') ||
+      this.hasChatted ||
+      prompts.length === 0
+    ) {
+      return;
+    }
+
+    chips.innerHTML = '';
+    for (const p of prompts) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'mindum-widget-pill-chip';
+      chip.textContent = p;
+      chip.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this.hidePillChips();
+        this.setOpen(true);
+        this.onPromptClick(p);
+      });
+      chips.appendChild(chip);
+    }
+    chips.classList.add('is-show');
+  }
+
+  private hidePillChips(): void {
+    this.root.querySelector('.mindum-widget-pill-chips')?.classList.remove('is-show');
+  }
+
   /** Caller wires up message submission via this. */
   onSubmit(handler: (text: string) => void): void {
     this.onSend = handler;
@@ -295,6 +344,12 @@ export class WidgetUi {
   }
 
   renderMessages(messages: UiMessage[]): void {
+    // A restored session (page reload mid-conversation) also retires
+    // the pill's starter chips — history is the context now.
+    if (!this.hasChatted && messages.some((m) => m.role === 'user')) {
+      this.hasChatted = true;
+      this.hidePillChips();
+    }
     this.messagesEl.innerHTML = '';
     for (const m of messages) {
       if (m.welcome) {
@@ -547,6 +602,8 @@ export class WidgetUi {
   private submit(): void {
     const text = this.input.value.trim();
     if (!text || this.loading) return;
+    this.hasChatted = true;
+    this.hidePillChips();
     // Sending your own message always returns you to the live tail.
     this.stickToBottom = true;
     this.input.value = '';
@@ -678,6 +735,7 @@ export class WidgetUi {
 
   private setOpen(open: boolean): void {
     this.root.classList.toggle('is-open', open);
+    if (open) this.hidePillChips();
     const bubble = this.root.querySelector<HTMLButtonElement>('.mindum-widget-bubble')!;
     bubble.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
     if (!open) {
@@ -699,6 +757,8 @@ export class WidgetUi {
       this.setOpen(false);
     });
     this.root.querySelector<HTMLButtonElement>('.mindum-widget-clear')!.addEventListener('click', () => {
+      // A cleared conversation is a fresh session — starter chips return.
+      this.hasChatted = false;
       this.onClearConversation();
     });
     this.root.querySelector<HTMLButtonElement>('.mindum-widget-dark')!.addEventListener('click', () => {
@@ -732,8 +792,15 @@ export class WidgetUi {
         this.setOpen(true);
       }
     });
-    this.input.addEventListener('focus', () => this.composer.classList.add('is-focus'));
-    this.input.addEventListener('blur', () => this.composer.classList.remove('is-focus'));
+    this.input.addEventListener('focus', () => {
+      this.composer.classList.add('is-focus');
+      this.showPillChips();
+    });
+    this.input.addEventListener('blur', () => {
+      this.composer.classList.remove('is-focus');
+      // Delay so a chip pointerdown lands before the strip hides.
+      window.setTimeout(() => this.hidePillChips(), 150);
+    });
     this.input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();

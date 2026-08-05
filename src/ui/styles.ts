@@ -349,6 +349,44 @@ export function buildStyles(theme: ThemeInput): string {
 .mindum-widget-root .mindum-widget-speak,
 .mindum-widget-root .mindum-widget-expand { display: none; }
 
+/* Starter-question chips floating above the focused pill (Fin pattern).
+   Column stack, staggered fade-in; retired after the first message. */
+.mindum-widget-pill-chips {
+  display: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 10px 4px;
+}
+.mindum-widget-pill-chips.is-show { display: flex; }
+.mindum-widget-pill-chip {
+  border: 1px solid var(--mw-line-2);
+  background: var(--mw-paper-glass, var(--mw-paper));
+  color: var(--mw-ink);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.3;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.10);
+  animation: mindum-chip-in var(--mw-sm) var(--mw-out) both;
+  transition: border-color var(--mw-xs) var(--mw-out), transform var(--mw-xs) var(--mw-out);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .mindum-widget-pill-chip {
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    backdrop-filter: blur(14px) saturate(1.3);
+  }
+}
+.mindum-widget-pill-chip:hover { border-color: var(--mw-accent); transform: translateY(-1px); }
+.mindum-widget-pill-chip:nth-child(2) { animation-delay: 40ms; }
+.mindum-widget-pill-chip:nth-child(3) { animation-delay: 80ms; }
+@keyframes mindum-chip-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
 /* Brand line under the pill replaces the keyboard-hint footnote. Gets
    its own tiny glass chip so it stays legible over vivid host content. */
 .mindum-widget-root.is-pill .mindum-widget-footnote {
