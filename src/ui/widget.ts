@@ -275,6 +275,15 @@ export class WidgetUi {
     this.root.querySelector('.mindum-widget-pill-chips')?.classList.remove('is-show');
   }
 
+  /**
+   * Re-render the starter chips if the pill is currently engaged —
+   * called by the bootstrap once the mint response delivers the agent's
+   * welcome prompts (they arrive async after the first focus).
+   */
+  refreshPillChips(): void {
+    if (document.activeElement === this.input) this.showPillChips();
+  }
+
   /** Caller wires up message submission via this. */
   onSubmit(handler: (text: string) => void): void {
     this.onSend = handler;
@@ -794,6 +803,15 @@ export class WidgetUi {
     });
     this.input.addEventListener('focus', () => {
       this.composer.classList.add('is-focus');
+      // Pill mode: the first engagement warms up the session (mint →
+      // theme, agent identity, welcome prompts) WITHOUT opening the
+      // panel — otherwise a fresh visitor's chips have nothing to show
+      // until the panel has been opened once. The onFirstOpen handler
+      // re-renders the chips when the mint lands (refreshPillChips).
+      if (this.launcher === 'pill' && !this.firstOpenFired) {
+        this.firstOpenFired = true;
+        this.onFirstOpen();
+      }
       this.showPillChips();
     });
     this.input.addEventListener('blur', () => {

@@ -108,6 +108,9 @@ function bootstrap(): void {
       }
 
       showWelcomeIfEmpty();
+      // W6.5 — if the visitor is still focused on the pill, re-render
+      // the starter chips now that the agent's prompts have arrived.
+      ui.refreshPillChips();
 
       echo = createEchoClient({ apiUrl: config.apiUrl, minted: tok });
       teardownSubscribe = echo.subscribe(config.sessionId, applyBroadcast, applyToken, applyConfirmation);
