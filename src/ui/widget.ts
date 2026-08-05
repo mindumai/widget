@@ -41,6 +41,9 @@ export class WidgetUi {
 
   private typingEl: HTMLDivElement;
 
+  /** W6 — interval handle for the cycling status-ticker phrases. */
+  private tickerTimer: number | null = null;
+
   private jumpEl: HTMLButtonElement;
 
   private form: HTMLFormElement;
@@ -330,7 +333,7 @@ export class WidgetUi {
    * Inline pill rendered while a tool_use is being executed by the
    * orchestrator (Phase 3D.3 / FR-049 / FR-057). Removed when the next
    * text_delta arrives — timeline reads: text → [tool ran] → text.
-   * Reuses .mindum-widget-typing-dot for the spinner visual.
+   * Shares the W6 .mindum-widget-spin spinner with the status ticker.
    */
   private buildToolProgressPill(m: UiMessage): HTMLDivElement {
     // role="status" implies aria-live="polite", no need to set it explicitly.
@@ -339,8 +342,7 @@ export class WidgetUi {
     const w = document.createElement('div');
     w.className = 'mindum-widget-tool-progress';
     w.setAttribute('role', 'status');
-    const dot = '<span class="mindum-widget-typing-dot"></span>';
-    w.innerHTML = dot + dot + dot + '<span></span>';
+    w.innerHTML = '<span class="mindum-widget-spin" aria-hidden="true"></span><span></span>';
     (w.lastElementChild as HTMLElement).textContent =
       `${humanizeToolNameProgressive(m.toolProgress!.toolName)}…`;
     return w;
@@ -372,7 +374,47 @@ export class WidgetUi {
     this.mic.setDisabled(loading);
     this.refreshSend();
     this.positionJump();
+    if (loading) this.startTicker();
+    else this.stopTicker();
     if (!loading) this.input.focus();
+  }
+
+  /**
+   * W6 status ticker — cycles generic activity phrases while the turn is
+   * in flight so the wait never reads as a stall. Real tool activity
+   * renders its own pill (buildToolProgressPill) and main.ts drops the
+   * loading state at that point, so the generic rotation only ever covers
+   * the "nothing concrete to say yet" window.
+   */
+  private static readonly TICKER_PHRASES = [
+    'Thinking…',
+    'Exploring your data…',
+    'Working on it…',
+    'Still thinking…',
+  ];
+
+  private startTicker(): void {
+    this.stopTicker();
+    const text = this.root.querySelector<HTMLSpanElement>('.mindum-widget-ticker-text');
+    if (!text) return;
+    text.textContent = WidgetUi.TICKER_PHRASES[0];
+    text.style.opacity = '1';
+    let i = 1;
+    this.tickerTimer = window.setInterval(() => {
+      text.style.opacity = '0';
+      window.setTimeout(() => {
+        text.textContent = WidgetUi.TICKER_PHRASES[i % WidgetUi.TICKER_PHRASES.length];
+        text.style.opacity = '1';
+        i++;
+      }, 220);
+    }, 1600);
+  }
+
+  private stopTicker(): void {
+    if (this.tickerTimer !== null) {
+      window.clearInterval(this.tickerTimer);
+      this.tickerTimer = null;
+    }
   }
 
   /**
@@ -604,7 +646,7 @@ export class WidgetUi {
           <div class="mindum-widget-head-avatar" aria-hidden="true">${SPARK_SVG}</div>
           <div class="mindum-widget-head-text">
             <div class="mindum-widget-head-title">Assistant</div>
-            <div class="mindum-widget-head-status"><span class="mindum-widget-head-dot"></span>Online</div>
+            <div class="mindum-widget-head-status"><span class="mindum-widget-head-dot"></span>AI agent</div>
           </div>
           <div class="mindum-widget-header-actions">
             <button type="button" class="mindum-widget-dark" aria-label="Switch to dark mode" title="Dark / light">
@@ -635,10 +677,9 @@ export class WidgetUi {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
           New message
         </button>
-        <div class="mindum-widget-typing" aria-label="Assistant is typing">
-          <span class="mindum-widget-typing-dot"></span>
-          <span class="mindum-widget-typing-dot"></span>
-          <span class="mindum-widget-typing-dot"></span>
+        <div class="mindum-widget-typing" role="status" aria-label="Assistant is working">
+          <span class="mindum-widget-spin" aria-hidden="true"></span>
+          <span class="mindum-widget-ticker-text">Thinking…</span>
         </div>
         <form class="mindum-widget-form">
           <div class="mindum-widget-composer">
@@ -678,6 +719,16 @@ export class WidgetUi {
     if (title) title.textContent = trimmed;
     const panel = this.root.querySelector('.mindum-widget-panel');
     if (panel) panel.setAttribute('aria-label', `${trimmed} chat`);
+
+    // W6 — monogram avatar for scoped agents: the agent's initial in the
+    // accent circle makes "Refund Helper" feel like a distinct product
+    // surface. A customer logo (W5 theme logo_url) always wins — never
+    // overwrite an avatar that already carries an image.
+    const avatar = this.root.querySelector<HTMLDivElement>('.mindum-widget-head-avatar');
+    if (avatar && !avatar.classList.contains('has-img')) {
+      avatar.classList.add('is-monogram');
+      avatar.textContent = trimmed.charAt(0).toUpperCase();
+    }
   }
 
   /**

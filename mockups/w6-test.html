@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>W6 visual test</title>
+<style>
+  body { margin: 0; font-family: system-ui; background: #f7f4ee; }
+  .page { max-width: 900px; margin: 0 auto; padding: 40px 24px; }
+  .b { background: #e7e2d5; border-radius: 10px; margin-bottom: 14px; }
+  h1 { color: #222; }
+  p { color: #666; max-width: 60ch; }
+  img.demo { width: 100%; border-radius: 12px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Host page for frosted glass check</h1>
+  <p>Colorful content below so the panel's translucency and blur are visible when the widget opens over it.</p>
+  <div class="b" style="height:120px; background:#d97706"></div>
+  <div class="b" style="height:120px; background:#0ea5e9"></div>
+  <div class="b" style="height:120px; background:#65a30d"></div>
+  <div class="b" style="height:120px; background:#e11d48"></div>
+  <div class="b" style="height:400px; background:repeating-linear-gradient(45deg,#ddd 0 20px,#bbb 20px 40px)"></div>
+</div>
+<script>
+window.__MINDUM_WIDGET__ = {
+  sessionId: 'w6-test-session',
+  endUserId: null,
+  agent: 'refund-helper',
+  tokenEndpoint: '/mindum/widget/token',
+  apiUrl: 'http://127.0.0.1:9',
+  wsUrl: '',
+  theme: { primary: '#d97706' },
+  position: 'bottom-right',
+  welcome: { message: 'Hi! I can check orders, track shipments, and process refunds.', prompts: ['Refund my last order', 'Where is my package?'] },
+  bundleUrl: ''
+};
+</script>
+<script src="w6-widget.js"></script>
+<script>
+// Test hooks: exercise UI states without a backend.
+setTimeout(() => {
+  const root = document.querySelector('.mindum-widget-root');
+  // Open the panel
+  document.querySelector('.mindum-widget-bubble')?.click();
+}, 300);
+</script>
+</body>
+</html>

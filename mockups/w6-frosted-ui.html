@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mindum Widget — W6 frosted UI mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif; background: #faf8f4; min-height: 100vh; }
+
+  /* ---- Fake client page (host site) ---- */
+  .host { max-width: 960px; margin: 0 auto; padding: 32px 24px 120px; }
+  .host nav { display: flex; gap: 24px; align-items: center; padding-bottom: 28px; border-bottom: 1px solid #e7e5e4; margin-bottom: 32px; }
+  .host nav .logo { font-weight: 700; font-size: 18px; color: #1c1917; }
+  .host nav span { color: #78716c; font-size: 14px; }
+  .block { border-radius: 10px; background: #efece4; }
+  .host h1 { font-size: 26px; color: #1c1917; margin-bottom: 8px; }
+  .host p.lead { color: #78716c; font-size: 15px; margin-bottom: 28px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+  .cards .block { height: 130px; }
+  .lines .block { height: 13px; margin-bottom: 10px; }
+
+  /* ---- Launcher bubble ---- */
+  .mw-bubble {
+    position: fixed; right: 24px; bottom: 24px; width: 56px; height: 56px; border-radius: 50%;
+    background: var(--mw-primary); border: none; cursor: pointer; z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    transition: transform 0.18s ease;
+  }
+  .mw-bubble:hover { transform: scale(1.06); }
+  .mw-bubble svg { width: 26px; height: 26px; fill: #fff; }
+
+  /* ---- Panel ---- */
+  :root {
+    --mw-primary: #d97706;
+    --mw-glass: rgba(253, 252, 249, 0.72);
+    --mw-bubble-bg: rgba(255, 255, 255, 0.85);
+    --mw-border: rgba(120, 113, 108, 0.22);
+    --mw-text: #292524;
+    --mw-text-muted: #78716c;
+    --mw-composer-bg: rgba(255, 255, 255, 0.9);
+  }
+  .mw-panel.dark {
+    --mw-glass: rgba(28, 27, 26, 0.78);
+    --mw-bubble-bg: rgba(50, 48, 46, 0.85);
+    --mw-border: rgba(214, 211, 209, 0.16);
+    --mw-text: #e7e5e4;
+    --mw-text-muted: #a8a29e;
+    --mw-composer-bg: rgba(50, 48, 46, 0.9);
+  }
+  .mw-panel {
+    position: fixed; right: 24px; bottom: 94px; width: 372px; height: 560px; z-index: 60;
+    max-width: calc(100vw - 40px); max-height: calc(100vh - 120px);
+    border-radius: 18px; border: 0.5px solid var(--mw-border);
+    background: var(--mw-glass);
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.16);
+    display: flex; flex-direction: column; overflow: hidden;
+    opacity: 0; transform: translateY(14px) scale(0.98); pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.32, 1.4, 0.5, 1);
+  }
+  .mw-panel.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+  @supports not (backdrop-filter: blur(1px)) {
+    .mw-panel { background: #fdfcf9; }
+    .mw-panel.dark { background: #1c1b1a; }
+  }
+
+  /* Header */
+  .mw-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 0.5px solid var(--mw-border); flex-shrink: 0; }
+  .mw-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--mw-primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; }
+  .mw-head-text { flex: 1; min-width: 0; }
+  .mw-head-name { font-size: 14.5px; font-weight: 600; color: var(--mw-text); }
+  .mw-head-sub { font-size: 11.5px; color: var(--mw-text-muted); display: flex; align-items: center; gap: 5px; }
+  .mw-dot { width: 6px; height: 6px; border-radius: 50%; background: #65a30d; }
+  .mw-head button { background: none; border: none; cursor: pointer; color: var(--mw-text-muted); padding: 6px; border-radius: 8px; font-size: 15px; line-height: 1; }
+  .mw-head button:hover { background: rgba(120,113,108,0.12); }
+
+  /* Messages */
+  .mw-msgs { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .mw-msg { max-width: 86%; padding: 10px 13px; font-size: 13.5px; line-height: 1.5; animation: mw-in 0.25s ease; }
+  @keyframes mw-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .mw-msg.bot { align-self: flex-start; background: var(--mw-bubble-bg); border: 0.5px solid var(--mw-border); border-radius: 14px 14px 14px 5px; color: var(--mw-text); }
+  .mw-msg.user { align-self: flex-end; background: var(--mw-primary); color: #fff; border-radius: 14px 14px 5px 14px; }
+
+  /* Prompt chips */
+  .mw-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .mw-chip { border: 1px solid var(--mw-primary); color: var(--mw-primary); background: transparent; border-radius: 999px; padding: 6px 13px; font-size: 12.5px; cursor: pointer; transition: background 0.15s; }
+  .mw-chip:hover { background: rgba(217, 119, 6, 0.1); }
+
+  /* Status ticker */
+  .mw-ticker { align-self: flex-start; display: flex; align-items: center; gap: 9px; padding: 9px 13px; background: var(--mw-bubble-bg); border: 0.5px solid var(--mw-border); border-radius: 14px 14px 14px 5px; }
+  .mw-spin { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--mw-primary); border-top-color: transparent; animation: mw-spin 0.85s linear infinite; flex-shrink: 0; }
+  @keyframes mw-spin { to { transform: rotate(360deg); } }
+  .mw-ticker-text { font-size: 12.5px; color: var(--mw-text-muted); transition: opacity 0.22s; }
+
+  /* Confirmation card */
+  .mw-confirm { align-self: flex-start; max-width: 92%; border: 1px solid rgba(245, 158, 11, 0.55); border-left: 3px solid #f59e0b; background: var(--mw-bubble-bg); border-radius: 12px; padding: 12px 14px; animation: mw-in 0.25s ease; }
+  .mw-confirm h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #b45309; margin-bottom: 6px; }
+  .mw-confirm p { font-size: 13.5px; color: var(--mw-text); line-height: 1.5; margin-bottom: 10px; }
+  .mw-confirm .btns { display: flex; gap: 8px; }
+  .mw-confirm button { border-radius: 8px; padding: 7px 14px; font-size: 12.5px; cursor: pointer; border: 1px solid var(--mw-border); background: transparent; color: var(--mw-text); }
+  .mw-confirm button.approve { background: var(--mw-primary); border-color: var(--mw-primary); color: #fff; font-weight: 600; }
+  .mw-confirm .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #65a30d; }
+
+  /* Composer */
+  .mw-composer { padding: 12px; border-top: 0.5px solid var(--mw-border); display: flex; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+  .mw-input { flex: 1; background: var(--mw-composer-bg); border: 0.5px solid var(--mw-border); border-radius: 16px; padding: 10px 14px; font-size: 13.5px; color: var(--mw-text); font-family: inherit; resize: none; outline: none; max-height: 92px; line-height: 1.45; }
+  .mw-input:focus { border-color: var(--mw-primary); }
+  .mw-input::placeholder { color: var(--mw-text-muted); }
+  .mw-send { width: 38px; height: 38px; border-radius: 50%; background: var(--mw-primary); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform 0.15s; }
+  .mw-send:hover { transform: scale(1.07); }
+  .mw-send svg { width: 17px; height: 17px; stroke: #fff; stroke-width: 2.4; fill: none; }
+  .mw-footer { text-align: center; font-size: 10.5px; color: var(--mw-text-muted); padding: 0 0 8px; }
+
+  .hint { position: fixed; left: 24px; bottom: 24px; font-size: 13px; color: #a8a29e; max-width: 300px; }
+</style>
+</head>
+<body>
+
+  <!-- Fake client page so the frosted glass has something to blur -->
+  <div class="host">
+    <nav>
+      <span class="logo">⬢ Acme Store</span>
+      <span>Products</span><span>Orders</span><span>Support</span><span>Account</span>
+    </nav>
+    <h1>Your orders</h1>
+    <p class="lead">Track, manage, and get help with everything you've bought.</p>
+    <div class="cards"><div class="block"></div><div class="block"></div><div class="block"></div></div>
+    <div class="lines">
+      <div class="block" style="width: 82%"></div>
+      <div class="block" style="width: 64%"></div>
+      <div class="block" style="width: 75%"></div>
+      <div class="block" style="width: 58%"></div>
+    </div>
+    <div class="cards" style="margin-top: 28px"><div class="block"></div><div class="block"></div><div class="block"></div></div>
+    <div class="lines">
+      <div class="block" style="width: 70%"></div>
+      <div class="block" style="width: 77%"></div>
+      <div class="block" style="width: 52%"></div>
+    </div>
+  </div>
+
+  <p class="hint">Click the bubble to open the widget, then use the suggested prompt to watch the full flow: status ticker → confirmation card → approve.</p>
+
+  <!-- Launcher -->
+  <button class="mw-bubble" id="bubble" aria-label="Open chat">
+    <svg viewBox="0 0 24 24"><path d="M12 3C7.03 3 3 6.58 3 11c0 2.09.91 3.99 2.4 5.42-.14 1.03-.6 2.3-1.55 3.32-.18.2-.04.52.23.5 1.94-.15 3.5-.86 4.55-1.55.98.33 2.1.51 3.37.51 4.97 0 9-3.58 9-8s-4.03-8.2-9-8.2z"/></svg>
+  </button>
+
+  <!-- Panel -->
+  <div class="mw-panel" id="panel">
+    <div class="mw-head">
+      <div class="mw-avatar">R</div>
+      <div class="mw-head-text">
+        <div class="mw-head-name">Refund Helper</div>
+        <div class="mw-head-sub"><span class="mw-dot"></span>AI agent</div>
+      </div>
+      <button id="darkToggle" title="Dark / light">◐</button>
+      <button id="closeBtn" title="Close">✕</button>
+    </div>
+
+    <div class="mw-msgs" id="msgs">
+      <div class="mw-msg bot">Hi! I'm the Refund Helper. I can check orders, track shipments, and process refunds.</div>
+      <div class="mw-chips" id="chips">
+        <button class="mw-chip" data-q="Refund my last order">Refund my last order</button>
+        <button class="mw-chip" data-q="Where is my package?">Where is my package?</button>
+      </div>
+    </div>
+
+    <div class="mw-composer">
+      <textarea class="mw-input" id="input" rows="1" placeholder="Ask about your order…"></textarea>
+      <button class="mw-send" id="send" aria-label="Send">
+        <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="mw-footer">Powered by Mindum</div>
+  </div>
+
+<script>
+  const panel = document.getElementById('panel');
+  const msgs = document.getElementById('msgs');
+  const input = document.getElementById('input');
+
+  document.getElementById('bubble').onclick = () => panel.classList.toggle('open');
+  document.getElementById('closeBtn').onclick = () => panel.classList.remove('open');
+  document.getElementById('darkToggle').onclick = () => panel.classList.toggle('dark');
+
+  // Composer autogrow
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 92) + 'px';
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(input.value); }
+  });
+  document.getElementById('send').onclick = () => submit(input.value);
+  document.getElementById('chips').addEventListener('click', (e) => {
+    if (e.target.dataset.q) submit(e.target.dataset.q);
+  });
+
+  function el(html) {
+    const d = document.createElement('div');
+    d.innerHTML = html;
+    return d.firstElementChild;
+  }
+  function scroll() { msgs.scrollTop = msgs.scrollHeight; }
+
+  // ---- Status ticker -------------------------------------------------
+  // Generic phrases rotate while nothing concrete is known; the moment a
+  // (simulated) tool_use_start event arrives, the ticker snaps to the
+  // humanized tool name. In the real widget the generic list loops and
+  // tool events interrupt it; here we script one believable sequence.
+  const GENERIC = ['Thinking…', 'Exploring your data…', 'Working on it…'];
+
+  function runTicker(sequence, done) {
+    const t = el('<div class="mw-ticker"><span class="mw-spin"></span><span class="mw-ticker-text"></span></div>');
+    const txt = t.querySelector('.mw-ticker-text');
+    msgs.appendChild(t); scroll();
+    let i = 0;
+    function step() {
+      if (i >= sequence.length) { t.remove(); done(); return; }
+      txt.style.opacity = '0';
+      setTimeout(() => { txt.textContent = sequence[i - 1] ? sequence[i][0] : sequence[i][0]; txt.style.opacity = '1'; }, i === 0 ? 0 : 200);
+      if (i === 0) { txt.textContent = sequence[0][0]; txt.style.opacity = '1'; }
+      setTimeout(step, sequence[i][1]);
+      i++;
+    }
+    step();
+  }
+
+  let demoDone = false;
+  function submit(text) {
+    text = (text || '').trim();
+    if (!text) return;
+    document.getElementById('chips')?.remove();
+    input.value = ''; input.style.height = 'auto';
+    msgs.appendChild(el(`<div class="mw-msg user"></div>`)).textContent = text;
+    scroll();
+
+    if (demoDone) {
+      runTicker([[GENERIC[0], 1200], [GENERIC[1], 1400]], () => {
+        msgs.appendChild(el(`<div class="mw-msg bot">This is a static mockup — imagine a helpful answer here. Reload the page to replay the full refund flow.</div>`));
+        scroll();
+      });
+      return;
+    }
+    demoDone = true;
+
+    // Generic → real tool activity → pause for confirmation
+    runTicker([
+      ['Thinking…', 1300],
+      ['Exploring your data…', 1500],
+      ['Checking orders…', 1900],        // ← tool_use_start: find_order
+    ], () => {
+      msgs.appendChild(el(`<div class="mw-msg bot">Found it — order <strong>#1284</strong>, Wireless Headphones, <strong>$49.00</strong>, delivered Jul 29. I need your approval to create the refund.</div>`));
+      const card = el(`
+        <div class="mw-confirm">
+          <h4>Approval needed</h4>
+          <p>Create a <strong>$49.00 refund</strong> for order <strong>#1284</strong> back to your original payment method.</p>
+          <div class="btns">
+            <button class="approve">Approve</button>
+            <button class="reject">Reject</button>
+          </div>
+        </div>`);
+      msgs.appendChild(card); scroll();
+
+      card.querySelector('.approve').onclick = () => {
+        card.querySelector('.btns').innerHTML = '<span class="badge">✓ Approved</span>';
+        card.style.opacity = '0.75';
+        runTicker([['Creating the refund…', 1800]], () => {   // ← tool_use_start: create_refund
+          msgs.appendChild(el(`<div class="mw-msg bot">Done! Refund <strong>#R-2291</strong> is on its way — you'll see $49.00 back on your card within 3–5 business days. Anything else?</div>`));
+          scroll();
+        });
+      };
+      card.querySelector('.reject').onclick = () => {
+        card.querySelector('.btns').innerHTML = '<span class="badge" style="color:#78716c">✕ Rejected</span>';
+        card.style.opacity = '0.75';
+        msgs.appendChild(el(`<div class="mw-msg bot">No problem — I haven't touched the order. Anything else?</div>`));
+        scroll();
+      };
+    });
+  }
+</script>
+</body>
+</html>

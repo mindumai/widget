@@ -44,6 +44,19 @@ function tint(rgb: [number, number, number], k: number): [number, number, number
   ];
 }
 
+/**
+ * W6 frosted glass — a surface color at partial opacity so the host page
+ * blurs through the panel. Non-hex palette values (or a customer bg we
+ * can't parse) fall back to the solid color: glass is a default, never
+ * a requirement.
+ */
+function glass(hex: string, alpha: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+}
+
 /** The theme fields the widget can apply (mint `theme` block ∪ SDK config). */
 export interface ThemeInput {
   primary?: string | null;
@@ -214,6 +227,9 @@ export function buildStyles(theme: ThemeInput): string {
   --mw-line:   ${light.line};
   --mw-line-2: ${light.line2};
   --mw-green:  ${light.green};
+  /* W6 frosted glass (default look) — panel + chrome at partial opacity */
+  --mw-glass:       ${glass(light.cream, 0.78)};
+  --mw-paper-glass: ${glass(light.paper, 0.72)};
   --mw-serif: ${welcomeFont};
   --mw-mono: ${MONO_STACK};
   /* -- motion -- */
@@ -288,6 +304,16 @@ export function buildStyles(theme: ThemeInput): string {
   pointer-events: none;
   transition: opacity var(--mw-sm) var(--mw-out), transform var(--mw-md) var(--mw-spring);
 }
+/* W6 frosted glass (default look): the host page blurs through the
+   panel. Gated behind @supports so unsupporting browsers keep the
+   solid surface above — glass is an enhancement, never a dependency. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .mindum-widget-panel {
+    background: var(--mw-glass);
+    -webkit-backdrop-filter: blur(16px) saturate(1.35);
+    backdrop-filter: blur(16px) saturate(1.35);
+  }
+}
 .mindum-widget-root[data-position="bottom-right"] .mindum-widget-panel { transform-origin: bottom right; }
 .mindum-widget-root[data-position="bottom-left"]  .mindum-widget-panel { transform-origin: bottom left; }
 .mindum-widget-root.is-open .mindum-widget-panel { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
@@ -296,13 +322,19 @@ export function buildStyles(theme: ThemeInput): string {
 .mindum-widget-header {
   display: flex; align-items: center; gap: 10px;
   padding: 13px 14px;
-  background: var(--mw-paper);
+  background: var(--mw-paper-glass, var(--mw-paper));
   border-bottom: 1px solid var(--mw-line);
 }
 .mindum-widget-head-avatar {
   width: 30px; height: 30px; border-radius: 9px; flex: none;
   background: linear-gradient(150deg, var(--mw-accent) 0%, var(--mw-accent-deep) 100%);
   display: grid; place-items: center; color: var(--mw-on-accent);
+}
+/* W6 — agent monogram replaces the sparkle when a scoped agent is
+   resolved (unless the customer's logo already owns the avatar). */
+.mindum-widget-head-avatar.is-monogram {
+  font-weight: 600; font-size: 14px; letter-spacing: 0.01em;
+  border-radius: 50%;
 }
 .mindum-widget-head-avatar svg { width: 16px; height: 16px; }
 .mindum-widget-head-text { min-width: 0; }
@@ -431,47 +463,54 @@ export function buildStyles(theme: ThemeInput): string {
 }
 @keyframes mindum-breathe { 0%,100% { opacity: 0.25; } 50% { opacity: 1; } }
 
-/* ---------- Typing indicator (assistant thinking) ---------- */
+/* ---------- Status ticker (assistant thinking, W6) ----------
+   Replaces the anonymous typing dots: a spinner + a phrase that cycles
+   ("Thinking…" → "Exploring your data…") until real tool activity or
+   the first streamed token takes over. */
 .mindum-widget-typing {
   display: none;
-  align-items: center; gap: 5px;
-  width: max-content;
+  align-items: center; gap: 8px;
+  width: max-content; max-width: calc(100% - 28px);
   margin: 0 0 8px 14px;
-  padding: 11px 13px;
-  background: var(--mw-paper);
+  padding: 10px 13px;
+  background: var(--mw-paper-glass, var(--mw-paper));
   border: 1px solid var(--mw-line);
   border-radius: 15px;
   border-bottom-left-radius: 5px;
 }
 .mindum-widget-root.is-loading .mindum-widget-typing { display: flex; }
-.mindum-widget-typing-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--mw-muted);
-  animation: mindum-bounce 1.3s var(--mw-inout) infinite;
+.mindum-widget-spin {
+  width: 13px; height: 13px; flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--mw-accent);
+  border-top-color: transparent;
+  animation: mindum-spin 0.85s linear infinite;
 }
-.mindum-widget-typing-dot:nth-child(2) { animation-delay: 0.18s; }
-.mindum-widget-typing-dot:nth-child(3) { animation-delay: 0.36s; }
-@keyframes mindum-bounce {
-  0%,70%,100% { transform: translateY(0); opacity: 0.45; }
-  35% { transform: translateY(-4px); opacity: 1; }
+@keyframes mindum-spin { to { transform: rotate(360deg); } }
+.mindum-widget-ticker-text {
+  font-size: 12.5px; color: var(--mw-ink-soft); line-height: 1.3;
+  transition: opacity 220ms var(--mw-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mindum-widget-spin { animation-duration: 2.4s; }
 }
 
 /* ---------- Tool-progress pill ---------- */
 .mindum-widget-tool-progress {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin: 2px 0 11px 0;
   padding: 8px 12px;
   border-radius: 999px;
-  background: var(--mw-paper);
+  background: var(--mw-paper-glass, var(--mw-paper));
   border: 1px solid var(--mw-line);
   color: var(--mw-ink-soft);
   font-size: 12.5px;
   line-height: 1.3;
   max-width: fit-content;
 }
-.mindum-widget-tool-progress .mindum-widget-typing-dot { width: 5px; height: 5px; }
+.mindum-widget-tool-progress .mindum-widget-spin { width: 11px; height: 11px; }
 
 /* ---------- Welcome ---------- */
 .mindum-widget-welcome { padding: 4px 2px 2px; margin-bottom: 10px; }
@@ -601,9 +640,9 @@ export function buildStyles(theme: ThemeInput): string {
 }
 .mindum-widget-composer {
   display: flex; align-items: flex-end; gap: 8px;
-  background: var(--mw-cream);
+  background: var(--mw-paper-glass, var(--mw-cream));
   border: 1.5px solid var(--mw-line-2);
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 6px 6px 6px 13px;
   transition: border-color var(--mw-sm) var(--mw-out), box-shadow var(--mw-sm) var(--mw-out);
 }
@@ -641,7 +680,7 @@ export function buildStyles(theme: ThemeInput): string {
 .mindum-widget-send {
   flex: none;
   width: 36px; height: 36px;
-  border: none; border-radius: 12px; cursor: pointer;
+  border: none; border-radius: 50%; cursor: pointer;
   background: linear-gradient(150deg, var(--mw-accent), var(--mw-accent-deep));
   color: var(--mw-on-accent);
   display: grid; place-items: center;
@@ -786,6 +825,8 @@ export function buildStyles(theme: ThemeInput): string {
   --mw-line:   ${dark.line};
   --mw-line-2: ${dark.line2};
   --mw-green:  ${dark.green};
+  --mw-glass:       ${glass(dark.cream, 0.8)};
+  --mw-paper-glass: ${glass(dark.paper, 0.72)};
   --mw-shadow-bubble: 0 8px 24px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.4);
   --mw-shadow-panel:  0 24px 60px rgba(0,0,0,0.6), 0 6px 16px rgba(0,0,0,0.45);
 }
