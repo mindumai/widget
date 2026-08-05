@@ -171,6 +171,12 @@ function bootstrap(): void {
     // Any submit hides the suggested-prompt chips. They're a "starter"
     // affordance only — re-showing them mid-conversation would clutter.
     ui.hideSuggestedPrompts();
+    // The welcome heading is a starter affordance too (FR-054: "hides
+    // on any first submit") — the real conversation replaces it. Splice
+    // in place: `messages` is shared with closures by reference.
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].welcome) messages.splice(i, 1);
+    }
     stopRequested = false;
     messages.push({ role: 'user', text });
     streamingMessage = null;
