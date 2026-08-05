@@ -23,7 +23,7 @@ export interface WidgetConfig {
   /** Reverb WS URL — kept for back-compat / display, but the actual connection details come back in the mint response since 2C.2. */
   wsUrl: string;
   /** Visual theme overrides. */
-  theme: { primary?: string };
+  theme: { primary?: string; launcher?: 'pill' | 'bubble' };
   /** Floating bubble placement. */
   position: 'bottom-right' | 'bottom-left';
   /** First-open welcome content (FR-054). Synthetic — not persisted, not sent to Anthropic. */
@@ -57,6 +57,8 @@ export interface MintedTheme {
   preset: string | null;
   primary: string | null;
   position: 'bottom-right' | 'bottom-left' | null;
+  /** W6.5 launcher style: 'pill' (default — centered input bar) | 'bubble' (classic corner button). */
+  launcher: 'pill' | 'bubble' | null;
   bg: string | null;
   radius: number | null;
   font: 'system' | 'serif' | 'mono' | null;

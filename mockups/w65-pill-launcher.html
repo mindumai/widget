@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mindum Widget — W6.5 pill launcher mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif; background: #faf8f4; min-height: 100vh; }
+
+  .host { max-width: 960px; margin: 0 auto; padding: 32px 24px 160px; }
+  .host nav { display: flex; gap: 24px; align-items: center; padding-bottom: 28px; border-bottom: 1px solid #e7e5e4; margin-bottom: 32px; }
+  .host nav .logo { font-weight: 700; font-size: 18px; color: #1c1917; }
+  .host nav span { color: #78716c; font-size: 14px; }
+  .block { background: #efece4; border-radius: 10px; margin-bottom: 14px; }
+  .host h1 { color: #1c1917; font-size: 26px; margin-bottom: 8px; }
+  .host p.lead { color: #78716c; font-size: 15px; margin-bottom: 28px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+  .cards .block { height: 130px; }
+
+  .controls { position: fixed; top: 14px; right: 14px; z-index: 99; display: flex; gap: 8px; background: #fff; border: 1px solid #e7e5e4; border-radius: 10px; padding: 8px; font-size: 12.5px; align-items: center; box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+  .controls button { border: 1px solid #d6d3d1; background: #fff; border-radius: 7px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
+  .controls button.active { background: #d97706; border-color: #d97706; color: #fff; }
+
+  :root {
+    --mw-primary: #d97706;
+    --mw-deep: #b26205;
+    --mw-glass: rgba(253, 252, 249, 0.58);
+    --mw-paper: rgba(255, 255, 255, 0.9);
+    --mw-shell: rgba(255, 255, 255, 0.55);
+    --mw-border: rgba(120, 113, 108, 0.22);
+    --mw-text: #292524;
+    --mw-muted: #78716c;
+  }
+
+  /* ============ PILL LAUNCHER (default) ============ */
+  .pill {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+    width: min(600px, calc(100vw - 40px));
+    display: flex; align-items: center; gap: 10px;
+    background: var(--mw-paper);
+    backdrop-filter: blur(18px) saturate(1.5); -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    border: 1px solid var(--mw-border);
+    border-radius: 999px;
+    padding: 8px 8px 8px 20px;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.14);
+    z-index: 60;
+    transition: box-shadow 0.2s, border-color 0.2s, width 0.25s cubic-bezier(0.22,1,0.36,1);
+  }
+  .pill:focus-within { border-color: var(--mw-primary); box-shadow: 0 10px 36px rgba(217,119,6,0.22); }
+  .pill input {
+    flex: 1; border: none; outline: none; background: transparent;
+    font-size: 15px; color: var(--mw-text); font-family: inherit; min-width: 0;
+  }
+  .pill input::placeholder { color: var(--mw-muted); }
+  .pill .caret-ph { position: relative; flex: 1; font-size: 15px; color: var(--mw-muted); pointer-events: none; white-space: nowrap; overflow: hidden; }
+  .pill-send {
+    flex: none; width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
+    background: linear-gradient(150deg, var(--mw-primary), var(--mw-deep));
+    display: grid; place-items: center; transition: transform 0.15s;
+  }
+  .pill-send:hover { transform: scale(1.07); }
+  .pill-send svg { width: 17px; height: 17px; stroke: #fff; stroke-width: 2.4; fill: none; }
+  .pill-brand { font-size: 10.5px; color: var(--mw-muted); position: fixed; left: 50%; transform: translateX(-50%); bottom: 6px; z-index: 60; }
+
+  /* ============ PANEL (opens above the pill, centered) ============ */
+  .panel {
+    position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%) translateY(14px) scale(0.98);
+    width: min(600px, calc(100vw - 40px)); height: min(560px, calc(100vh - 170px));
+    border-radius: 18px; border: 0.5px solid var(--mw-border);
+    background: var(--mw-glass);
+    backdrop-filter: blur(20px) saturate(1.5); -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.18);
+    display: flex; flex-direction: column; overflow: hidden; z-index: 59;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.28s cubic-bezier(0.32, 1.4, 0.5, 1);
+  }
+  .panel.open { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); pointer-events: auto; }
+
+  .head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 0.5px solid var(--mw-border); flex-shrink: 0; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--mw-primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+  .head-name { font-size: 14.5px; font-weight: 600; color: var(--mw-text); }
+  .head-sub { font-size: 11px; color: var(--mw-muted); display: flex; align-items: center; gap: 4px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: #65a30d; }
+  .head-actions { margin-left: auto; display: flex; gap: 2px; }
+  .head-actions button { background: none; border: none; cursor: pointer; color: var(--mw-muted); padding: 6px; border-radius: 8px; font-size: 14px; line-height: 1; }
+  .head-actions button:hover { background: rgba(120,113,108,0.12); }
+
+  .msgs { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 78%; padding: 10px 13px; font-size: 13.5px; line-height: 1.55; animation: in 0.25s ease; }
+  @keyframes in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .msg.bot { align-self: flex-start; background: var(--mw-paper); border: 0.5px solid var(--mw-border); border-radius: 14px 14px 14px 5px; color: var(--mw-text); }
+  .msg.user { align-self: flex-end; background: var(--mw-primary); color: #fff; border-radius: 14px 14px 5px 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip { border: 1px solid var(--mw-primary); color: var(--mw-primary); background: transparent; border-radius: 999px; padding: 6px 13px; font-size: 12.5px; cursor: pointer; }
+  .chip:hover { background: rgba(217,119,6,0.08); }
+
+  .ticker { align-self: flex-start; display: flex; align-items: center; gap: 9px; padding: 9px 13px; background: var(--mw-paper); border: 0.5px solid var(--mw-border); border-radius: 14px 14px 14px 5px; }
+  .spin { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--mw-primary); border-top-color: transparent; animation: sp 0.85s linear infinite; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  .ticker span:last-child { font-size: 12.5px; color: var(--mw-muted); transition: opacity 0.22s; }
+
+  /* ============ CLASSIC BUBBLE (opt-in) ============ */
+  .bubble {
+    position: fixed; right: 24px; bottom: 24px; width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(150deg, var(--mw-primary), var(--mw-deep)); border: none; cursor: pointer; z-index: 60;
+    display: none; align-items: center; justify-content: center;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.18); transition: transform 0.18s;
+  }
+  .bubble:hover { transform: scale(1.06); }
+  .bubble svg { width: 26px; height: 26px; fill: #fff; }
+
+  body.mode-bubble .pill, body.mode-bubble .pill-brand { display: none; }
+  body.mode-bubble .bubble { display: flex; }
+  body.mode-bubble .panel {
+    left: auto; right: 24px; bottom: 94px; transform: translateY(14px) scale(0.98);
+    width: 372px; height: min(560px, calc(100vh - 130px));
+  }
+  body.mode-bubble .panel.open { transform: translateY(0) scale(1); }
+  body.mode-bubble .panel .composer-inline { display: flex; }
+  .composer-inline { display: none; padding: 10px 12px; border-top: 0.5px solid var(--mw-border); gap: 8px; align-items: center; flex-shrink: 0; }
+  .composer-inline input { flex: 1; background: var(--mw-paper); border: 0.5px solid var(--mw-border); border-radius: 16px; padding: 10px 13px; font-size: 13.5px; outline: none; color: var(--mw-text); font-family: inherit; }
+</style>
+</head>
+<body class="mode-pill">
+
+  <div class="host">
+    <nav><span class="logo">⬢ Acme Store</span><span>Products</span><span>Orders</span><span>Support</span><span>Account</span></nav>
+    <h1>Your orders</h1>
+    <p class="lead">Track, manage, and get help with everything you've bought.</p>
+    <div class="cards"><div class="block"></div><div class="block"></div><div class="block"></div></div>
+    <div class="block" style="height:13px; width:82%"></div>
+    <div class="block" style="height:13px; width:64%"></div>
+    <div class="block" style="height:13px; width:75%"></div>
+    <div class="cards" style="margin-top:28px">
+      <div class="block" style="background:#d97706"></div>
+      <div class="block" style="background:#0ea5e9"></div>
+      <div class="block" style="background:#65a30d"></div>
+    </div>
+    <div class="cards">
+      <div class="block" style="background:#e11d48"></div>
+      <div class="block" style="background:#7c3aed"></div>
+      <div class="block" style="background:repeating-linear-gradient(45deg,#ddd 0 16px,#999 16px 32px)"></div>
+    </div>
+    <div class="block" style="height:13px; width:70%"></div>
+    <div class="block" style="height:13px; width:55%"></div>
+  </div>
+
+  <div class="controls">
+    <span style="color:#78716c">Launcher:</span>
+    <button id="mode-pill-btn" class="active" onclick="setMode('pill')">Pill (default)</button>
+    <button id="mode-bubble-btn" onclick="setMode('bubble')">Bubble (opt-in)</button>
+  </div>
+
+  <!-- Panel -->
+  <div class="panel" id="panel">
+    <div class="head">
+      <div class="avatar">S</div>
+      <div>
+        <div class="head-name">SearchAgent</div>
+        <div class="head-sub"><span class="dot"></span>AI agent</div>
+      </div>
+      <div class="head-actions">
+        <button title="Clear">🗑</button>
+        <button title="Close" onclick="closePanel()">✕</button>
+      </div>
+    </div>
+    <div class="msgs" id="msgs">
+      <div class="msg bot">Hi! I can search orders, users, and products for you.</div>
+      <div class="chips" id="chips">
+        <button class="chip" data-q="Refund my last order">Refund my last order</button>
+        <button class="chip" data-q="Where is my package?">Where is my package?</button>
+      </div>
+    </div>
+    <div class="composer-inline" id="composer-inline">
+      <input id="inline-input" placeholder="Ask anything…">
+      <button class="pill-send" onclick="submitFrom(document.getElementById('inline-input'))" aria-label="Send">
+        <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Pill launcher (default) -->
+  <div class="pill" id="pill">
+    <div class="caret-ph" id="ph"></div>
+    <input id="pill-input" aria-label="Ask the assistant" style="position:absolute; left:20px; right:56px; opacity:0;">
+    <button class="pill-send" onclick="submitFrom(document.getElementById('pill-input'))" aria-label="Send">
+      <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+  <div class="pill-brand">Powered by <b>Mindum</b></div>
+
+  <!-- Classic bubble (opt-in) -->
+  <button class="bubble" id="bubble" aria-label="Open chat" onclick="togglePanel()">
+    <svg viewBox="0 0 24 24"><path d="M12 3C7.03 3 3 6.58 3 11c0 2.09.91 3.99 2.4 5.42-.14 1.03-.6 2.3-1.55 3.32-.18.2-.04.52.23.5 1.94-.15 3.5-.86 4.55-1.55.98.33 2.1.51 3.37.51 4.97 0 9-3.58 9-8s-4.03-8.2-9-8.2z"/></svg>
+  </button>
+
+<script>
+  const panel = document.getElementById('panel');
+  const msgs = document.getElementById('msgs');
+  const pillInput = document.getElementById('pill-input');
+  const ph = document.getElementById('ph');
+
+  function setMode(m) {
+    document.body.className = 'mode-' + m;
+    document.getElementById('mode-pill-btn').classList.toggle('active', m === 'pill');
+    document.getElementById('mode-bubble-btn').classList.toggle('active', m === 'bubble');
+    closePanel();
+  }
+  function openPanel() { panel.classList.add('open'); }
+  function closePanel() { panel.classList.remove('open'); }
+  function togglePanel() { panel.classList.toggle('open'); }
+
+  // ---- Animated typing placeholder (agent-aware) ----
+  const PHRASES = [
+    'Ask SearchAgent anything…',
+    'Refund my last order…',
+    'Where is my package?',
+    'How many users signed up today?',
+  ];
+  let pi = 0, ci = 0, deleting = false, phTimer;
+  function typeLoop() {
+    if (document.activeElement === pillInput && pillInput.value !== '') return schedule(800);
+    const phrase = PHRASES[pi % PHRASES.length];
+    if (!deleting) {
+      ci++;
+      if (ci >= phrase.length + 14) { deleting = true; }
+    } else {
+      ci -= 2;
+      if (ci <= 0) { ci = 0; deleting = false; pi++; }
+    }
+    ph.textContent = phrase.slice(0, Math.min(ci, phrase.length)) + (deleting || ci < phrase.length ? '▏' : '');
+    schedule(deleting ? 22 : (ci >= phrase.length ? 90 : 38 + Math.random() * 40));
+  }
+  function schedule(ms) { phTimer = setTimeout(typeLoop, ms); }
+  typeLoop();
+
+  // Pill input behavior: typing reveals text (hides placeholder), focus opens nothing yet,
+  // first keystroke opens the panel so the visitor sees where their message will go.
+  pillInput.style.opacity = '1';
+  pillInput.style.position = 'relative';
+  pillInput.style.left = '0';
+  pillInput.addEventListener('input', () => {
+    ph.style.display = pillInput.value ? 'none' : 'block';
+    if (pillInput.value && !panel.classList.contains('open')) openPanel();
+  });
+  pillInput.addEventListener('focus', () => { ph.style.opacity = '0.45'; });
+  pillInput.addEventListener('blur', () => { ph.style.opacity = '1'; });
+  pillInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); submitFrom(pillInput); }
+    if (e.key === 'Escape') closePanel();
+  });
+  document.getElementById('inline-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); submitFrom(e.target); }
+  });
+  document.getElementById('chips').addEventListener('click', (e) => {
+    if (e.target.dataset.q) { runDemo(e.target.dataset.q); }
+  });
+
+  function el(html) { const d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }
+  function scroll() { msgs.scrollTop = msgs.scrollHeight; }
+
+  function submitFrom(input) {
+    const text = input.value.trim();
+    if (!text) { openPanel(); return; }
+    input.value = '';
+    ph.style.display = 'block';
+    runDemo(text);
+  }
+
+  let demoRan = false;
+  function runDemo(text) {
+    openPanel();
+    document.getElementById('chips')?.remove();
+    const u = el('<div class="msg user"></div>'); u.textContent = text;
+    msgs.appendChild(u); scroll();
+
+    const t = el('<div class="ticker"><span class="spin"></span><span>Thinking…</span></div>');
+    msgs.appendChild(t); scroll();
+    const phases = demoRan
+      ? [['Thinking…', 1100], ['Exploring your data…', 1300]]
+      : [['Thinking…', 1200], ['Exploring your data…', 1400], ['Searching orders…', 1700]];
+    let i = 0;
+    const txt = t.querySelector('span:last-child');
+    (function step() {
+      if (i >= phases.length) {
+        t.remove();
+        const reply = el('<div class="msg bot"></div>');
+        reply.textContent = demoRan
+          ? 'This is a static mockup — imagine a live answer here.'
+          : 'Found it — order #1284, Wireless Headphones, $49.00, delivered Jul 29. Want me to start a refund?';
+        demoRan = true;
+        msgs.appendChild(reply); scroll();
+        return;
+      }
+      txt.style.opacity = '0';
+      setTimeout(() => { txt.textContent = phases[i][0]; txt.style.opacity = '1'; i++; }, i === 0 ? 0 : 200);
+      setTimeout(step, phases[i] ? phases[i][1] : 0);
+    })();
+  }
+</script>
+</body>
+</html>

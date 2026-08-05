@@ -64,6 +64,8 @@ export interface ThemeInput {
   bg?: string | null;
   radius?: number | null;
   font?: string | null;
+  /** W6.5 — 'pill' (default) | 'bubble'. Consumed by WidgetUi, not CSS. */
+  launcher?: string | null;
 }
 
 interface Palette {
@@ -227,9 +229,12 @@ export function buildStyles(theme: ThemeInput): string {
   --mw-line:   ${light.line};
   --mw-line-2: ${light.line2};
   --mw-green:  ${light.green};
-  /* W6 frosted glass (default look) — panel + chrome at partial opacity */
-  --mw-glass:       ${glass(light.cream, 0.78)};
-  --mw-paper-glass: ${glass(light.paper, 0.72)};
+  /* W6 frosted glass (default look). W6.5 recipe: the SHELL is the
+     dramatic glass (0.58); surfaces that carry text (composer/pill,
+     header, ticker) stay near-solid (0.9) so readability never depends
+     on what the host page puts underneath. */
+  --mw-glass:       ${glass(light.cream, 0.58)};
+  --mw-paper-glass: ${glass(light.paper, 0.9)};
   --mw-serif: ${welcomeFont};
   --mw-mono: ${MONO_STACK};
   /* -- motion -- */
@@ -288,6 +293,56 @@ export function buildStyles(theme: ThemeInput): string {
 @keyframes mindum-spk-a { 0%,100% { opacity: 0.9; } 50% { opacity: 1; } }
 @keyframes mindum-spk-b { 0%,100% { opacity: 0.45; transform: scale(0.7); } 45% { opacity: 1; transform: scale(1); } }
 @keyframes mindum-spk-c { 0%,100% { opacity: 0.4; transform: scale(0.6); } 60% { opacity: 0.95; transform: scale(1); } }
+
+/* ---------- Pill launcher (W6.5, default) ----------
+   The composer form relocates out of the panel and becomes a centered,
+   always-visible input pill at the bottom of the viewport (Fin-style).
+   The panel opens above it; the pill stays the one place you type. */
+.mindum-widget-root.is-pill[data-position] {
+  left: 50%; right: auto; bottom: 10px;
+  transform: translateX(-50%);
+  width: min(600px, calc(100vw - 32px));
+  align-items: stretch;
+}
+.mindum-widget-root.is-pill .mindum-widget-bubble { display: none; }
+.mindum-widget-root.is-pill .mindum-widget-rz { display: none; }
+.mindum-widget-root.is-pill .mindum-widget-panel {
+  width: 100%;
+  height: min(560px, calc(100vh - 170px));
+  margin-bottom: 10px;
+}
+.mindum-widget-root.is-pill .mindum-widget-pillbar {
+  display: flex; flex-direction: column; gap: 5px;
+}
+.mindum-widget-root.is-pill .mindum-widget-form {
+  margin: 0; padding: 0;
+  background: transparent;
+  border-top: none;
+}
+.mindum-widget-root.is-pill .mindum-widget-composer {
+  border-radius: 999px;
+  padding: 5px 5px 5px 18px;
+  box-shadow: 0 10px 32px rgba(0,0,0,0.14);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .mindum-widget-root.is-pill .mindum-widget-composer {
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+  }
+}
+.mindum-widget-root.is-pill .mindum-widget-input { font-size: 15px; }
+.mindum-widget-root.is-pill .mindum-widget-send { border-radius: 50%; }
+/* Brand line under the pill replaces the keyboard-hint footnote. Gets
+   its own tiny glass chip so it stays legible over vivid host content. */
+.mindum-widget-root.is-pill .mindum-widget-footnote {
+  margin: 0 auto;
+  width: max-content;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--mw-paper-glass, var(--mw-paper));
+}
+/* The panel stays display:flex but invisible when closed (existing
+   opacity/transform transition) — the pillbar below it is always live. */
 
 /* ---------- Panel ---------- */
 .mindum-widget-panel {
@@ -825,8 +880,8 @@ export function buildStyles(theme: ThemeInput): string {
   --mw-line:   ${dark.line};
   --mw-line-2: ${dark.line2};
   --mw-green:  ${dark.green};
-  --mw-glass:       ${glass(dark.cream, 0.8)};
-  --mw-paper-glass: ${glass(dark.paper, 0.72)};
+  --mw-glass:       ${glass(dark.cream, 0.68)};
+  --mw-paper-glass: ${glass(dark.paper, 0.92)};
   --mw-shadow-bubble: 0 8px 24px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.4);
   --mw-shadow-panel:  0 24px 60px rgba(0,0,0,0.6), 0 6px 16px rgba(0,0,0,0.45);
 }

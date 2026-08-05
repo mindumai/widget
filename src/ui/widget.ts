@@ -89,6 +89,12 @@ export class WidgetUi {
   /** Merged theme across injectStyles + every updateTheme call (W5). */
   private appliedTheme: ThemeInput = {};
 
+  /** W6.5 launcher mode — 'pill' (default) or classic 'bubble' (opt-in). */
+  private launcher: 'pill' | 'bubble' = 'pill';
+
+  /** Timer for the pill's animated typing placeholder. */
+  private phTimer: number | null = null;
+
   constructor(private readonly config: WidgetConfig) {
     this.injectStyles();
     this.root = this.buildRoot();
@@ -119,7 +125,105 @@ export class WidgetUi {
 
     this.wireEvents();
     this.wireResize();
+    // W6.5 — pill is the default launcher; 'bubble' is the opt-in
+    // classic. SDK config decides at boot; the mint theme can override
+    // via updateTheme once the dashboard's choice arrives.
+    this.setLauncher(this.config.theme.launcher === 'bubble' ? 'bubble' : 'pill');
     document.body.appendChild(this.root);
+  }
+
+  /**
+   * W6.5 — switch launcher modes. In pill mode the composer form
+   * relocates out of the panel into an always-visible centered pill bar
+   * (same textarea/mic/send nodes — every existing behavior rides
+   * along), and the footnote becomes the brand line. Bubble mode puts
+   * everything back.
+   */
+  setLauncher(mode: 'pill' | 'bubble'): void {
+    if (this.launcher === mode && this.root.classList.contains('is-pill') === (mode === 'pill')) return;
+    this.launcher = mode;
+    this.root.classList.toggle('is-pill', mode === 'pill');
+
+    const footnote = this.form.querySelector<HTMLDivElement>('.mindum-widget-footnote');
+    if (mode === 'pill') {
+      let bar = this.root.querySelector<HTMLDivElement>('.mindum-widget-pillbar');
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.className = 'mindum-widget-pillbar';
+        this.root.appendChild(bar);
+      }
+      bar.appendChild(this.form);
+      if (footnote) footnote.innerHTML = 'Powered by <b>Mindum</b>';
+      this.startPlaceholderLoop();
+    } else {
+      this.panel.appendChild(this.form);
+      if (footnote) footnote.innerHTML = '<b>Enter</b> to send · <b>Shift+Enter</b> for a new line';
+      this.stopPlaceholderLoop();
+      this.input.placeholder = 'Ask anything…';
+    }
+  }
+
+  /**
+   * Animated typing placeholder for the closed pill: cycles agent-aware
+   * phrases character by character. Pauses (static placeholder) while
+   * the panel is open, the input has text, or a turn is loading.
+   */
+  private pillPhrases(): string[] {
+    const title = this.root.querySelector('.mindum-widget-head-title')?.textContent?.trim();
+    const name = title && title !== 'Assistant' ? title : null;
+    const phrases = [name ? `Ask ${name} anything…` : 'Ask me anything…'];
+    for (const p of this.config.welcome.prompts.slice(0, 3)) phrases.push(`${p}…`);
+    return phrases;
+  }
+
+  private startPlaceholderLoop(): void {
+    this.stopPlaceholderLoop();
+    let phraseIdx = 0;
+    let charIdx = 0;
+    let deleting = false;
+
+    const tick = () => {
+      const eligible =
+        this.launcher === 'pill' &&
+        !this.root.classList.contains('is-open') &&
+        this.input.value === '' &&
+        !this.loading;
+
+      if (!eligible) {
+        this.input.placeholder = 'Ask anything…';
+        this.phTimer = window.setTimeout(tick, 800);
+        return;
+      }
+
+      const phrases = this.pillPhrases();
+      const phrase = phrases[phraseIdx % phrases.length];
+      if (!deleting) {
+        charIdx++;
+        // Hold the completed phrase for a beat before deleting.
+        if (charIdx >= phrase.length + 16) deleting = true;
+      } else {
+        charIdx -= 2;
+        if (charIdx <= 0) {
+          charIdx = 0;
+          deleting = false;
+          phraseIdx++;
+        }
+      }
+      const shown = phrase.slice(0, Math.min(Math.max(charIdx, 0), phrase.length));
+      this.input.placeholder = shown + (shown.length < phrase.length || deleting ? '▏' : '');
+      this.phTimer = window.setTimeout(
+        tick,
+        deleting ? 24 : charIdx >= phrase.length ? 110 : 40 + Math.random() * 45,
+      );
+    };
+    tick();
+  }
+
+  private stopPlaceholderLoop(): void {
+    if (this.phTimer !== null) {
+      window.clearTimeout(this.phTimer);
+      this.phTimer = null;
+    }
   }
 
   /** Caller wires up message submission via this. */
@@ -613,6 +717,15 @@ export class WidgetUi {
     this.input.addEventListener('input', () => {
       this.autoGrow();
       this.refreshSend();
+      // W6.5 type-to-open: the first keystroke in the closed pill opens
+      // the panel so the visitor sees where their message will land.
+      if (
+        this.launcher === 'pill' &&
+        this.input.value !== '' &&
+        !this.root.classList.contains('is-open')
+      ) {
+        this.setOpen(true);
+      }
     });
     this.input.addEventListener('focus', () => this.composer.classList.add('is-focus'));
     this.input.addEventListener('blur', () => this.composer.classList.remove('is-focus'));
@@ -627,6 +740,16 @@ export class WidgetUi {
       if (this.loading) {
         // The send button is the stop button right now (W4).
         this.onStopRequest();
+        return;
+      }
+      // W6.5 — clicking send on an empty closed pill just opens the
+      // panel (welcome + chips) instead of silently doing nothing.
+      if (
+        this.launcher === 'pill' &&
+        this.input.value.trim() === '' &&
+        !this.root.classList.contains('is-open')
+      ) {
+        this.setOpen(true);
         return;
       }
       this.submit();
@@ -747,6 +870,7 @@ export class WidgetUi {
     font?: string | null;
     logo_url?: string | null;
     icon_url?: string | null;
+    launcher?: string | null;
   }): void {
     let restyle = false;
     if (theme.primary != null) {
@@ -779,6 +903,10 @@ export class WidgetUi {
     }
     if (theme.logo_url) this.applyHeaderLogo(theme.logo_url);
     if (theme.icon_url) this.applyLauncherIcon(theme.icon_url);
+    // W6.5 — dashboard-chosen launcher style arrives with the mint.
+    if (theme.launcher === 'pill' || theme.launcher === 'bubble') {
+      this.setLauncher(theme.launcher);
+    }
   }
 
   /** Swap the sparkle avatar for the customer's logo (W5 / FR-062). */
