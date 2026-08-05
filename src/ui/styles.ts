@@ -319,10 +319,21 @@ export function buildStyles(theme: ThemeInput): string {
   background: transparent;
   border-top: none;
 }
+/* Fin-style compact-until-engaged: the closed pill sits at a modest
+   width; focusing it (or opening the panel) expands to the full bar.
+   max-width animates; width stays 100% so centering holds. */
 .mindum-widget-root.is-pill .mindum-widget-composer {
   border-radius: 999px;
   padding: 5px 5px 5px 18px;
   box-shadow: 0 10px 32px rgba(0,0,0,0.14);
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto;
+  transition: max-width var(--mw-md) var(--mw-out), border-color var(--mw-sm) var(--mw-out), box-shadow var(--mw-sm) var(--mw-out);
+}
+.mindum-widget-root.is-pill .mindum-widget-composer.is-focus,
+.mindum-widget-root.is-pill.is-open .mindum-widget-composer {
+  max-width: 100%;
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .mindum-widget-root.is-pill .mindum-widget-composer {
@@ -332,6 +343,12 @@ export function buildStyles(theme: ThemeInput): string {
 }
 .mindum-widget-root.is-pill .mindum-widget-input { font-size: 15px; }
 .mindum-widget-root.is-pill .mindum-widget-send { border-radius: 50%; }
+/* W6.5 scope cut (2026-08-05): read-aloud and expand are parked — the
+   buttons stay in the DOM (their modules keep working) but never render.
+   Restore by deleting these two rules. */
+.mindum-widget-root .mindum-widget-speak,
+.mindum-widget-root .mindum-widget-expand { display: none; }
+
 /* Brand line under the pill replaces the keyboard-hint footnote. Gets
    its own tiny glass chip so it stays legible over vivid host content. */
 .mindum-widget-root.is-pill .mindum-widget-footnote {
