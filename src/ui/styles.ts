@@ -334,6 +334,12 @@ export function buildStyles(theme: ThemeInput): string {
   align-items: center;
   transition: max-width var(--mw-md) var(--mw-out), border-color var(--mw-sm) var(--mw-out), box-shadow var(--mw-sm) var(--mw-out);
 }
+/* Voice dictation (W3) is temporarily shelved — the mic misbehaved in
+   real-world testing (Oncorr pilot, Aug 2026), and a dead button in a
+   client demo is worse than no button. The SpeechRecognition wiring
+   stays in the bundle; delete this rule to bring the mic back. */
+.mindum-widget-root .mindum-widget-mic { display: none !important; }
+
 /* Fin pattern: the mic only appears once the visitor engages the pill
    (focus) or the panel is open — the resting pill stays minimal. */
 .mindum-widget-root.is-pill .mindum-widget-mic { display: none; }
