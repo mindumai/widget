@@ -54,3 +54,29 @@ export class ConfirmError extends Error {
     this.name = 'ConfirmError';
   }
 }
+export async function postConfirmExpire(opts: {
+  apiUrl: string;
+  token: string;
+  conversationId: number;
+}): Promise<void> {
+  const url = `${opts.apiUrl.replace(/\/+$/, '')}/api/widget/confirm/expire`;
+
+  // Best-effort by design. The server sweeps stale confirmations at the next
+  // turn anyway (D-6C-3), so a failure here costs the user a slightly stale
+  // card, not a stuck conversation — and surfacing an error for something
+  // they did not do would be worse than the staleness.
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${opts.token}`,
+      },
+      body: JSON.stringify({ conversation_id: opts.conversationId }),
+      credentials: 'omit',
+    });
+  } catch {
+    // Swallowed on purpose — see above.
+  }
+}

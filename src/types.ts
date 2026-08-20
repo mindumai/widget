@@ -182,7 +182,13 @@ export interface BroadcastConfirmation {
     assistant_message_id: number;
     tool_uses: PendingToolUse[];
     status: 'pending' | 'decided';
-    decision?: 'approve' | 'reject';
+    /**
+     * `timeout` is a third value, never folded into `reject`: the audit trail
+     * has to show that nobody answered rather than that someone said no.
+     */
+    decision?: 'approve' | 'reject' | 'timeout';
+    /** Bridge mode only — the deadline the card counts down to. */
+    expires_at?: string;
   }>;
   created_at: string | null;
 }
@@ -193,7 +199,13 @@ export type ConfirmationCardState =
   | 'approving'
   | 'rejecting'
   | 'approved'
-  | 'rejected';
+  | 'rejected'
+  /**
+   * The five-minute window closed before anyone answered. Distinct from
+   * 'rejected' on purpose: a rejection is something the user did, an expiry
+   * is something that happened to them, and the copy has to differ.
+   */
+  | 'expired';
 
 /** What we keep in memory per chat session for rendering. */
 export interface UiMessage {
@@ -213,6 +225,15 @@ export interface UiMessage {
     conversationId: number;
     toolUses: PendingToolUse[];
     state: ConfirmationCardState;
+    /**
+     * ISO-8601 deadline issued by the bridge (§4.6). The card counts down to
+     * this; it is never computed locally, because the bridge owns the clock
+     * and a browser that disagrees would show a countdown that lies.
+     *
+     * Absent on the Anthropic path, whose confirmations have no TTL — and the
+     * card must render exactly as it does today when it is absent.
+     */
+    expiresAt?: string;
   };
   /** Tool-progress pill payload (Phase 3D.3 / FR-049 / FR-057); only present when role === 'tool_progress'. */
   toolProgress?: {

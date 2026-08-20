@@ -61,6 +61,11 @@ export class WidgetUi {
   private onFirstOpen: () => void = () => {};
 
   private onConfirmDecision: (messageId: number, decision: 'approve' | 'reject') => void = () => {};
+  private onConfirmExpired: (messageId: number) => void = () => {};
+
+  /** Live countdown intervals, keyed by card, so a re-render cannot orphan one. */
+  private countdownTimers = new Map<number, number>();
+
 
   private onPromptClick: (text: string) => void = () => {};
 
@@ -309,6 +314,11 @@ export class WidgetUi {
     this.onPromptClick = handler;
   }
 
+  /** Fires when a card's countdown reaches its deadline (D-6C-3). */
+  onConfirmExpiry(handler: (messageId: number) => void): void {
+    this.onConfirmExpired = handler;
+  }
+
   /** Fires when the user clicks the stop button mid-stream (W4). */
   onStop(handler: () => void): void {
     this.onStopRequest = handler;
@@ -443,6 +453,44 @@ export class WidgetUi {
   }
 
   /**
+   * Tick a card's remaining time down to its deadline.
+   *
+   * When it reaches zero the widget tells the API — under the detach model
+   * nobody on the server is listening when the window closes, so the browser,
+   * which already has the deadline, is what closes the loop (D-6C-3). The
+   * server still checks the deadline itself: this is a nudge, not an
+   * authority, and a client that lies gains nothing.
+   */
+  private startCountdown(el: HTMLElement, expiresAt: string, messageId: number): void {
+    const deadline = Date.parse(expiresAt);
+    if (Number.isNaN(deadline)) return;
+
+    const tick = () => {
+      const remaining = Math.max(0, deadline - Date.now());
+      if (remaining === 0) {
+        window.clearInterval(handle);
+        this.countdownTimers.delete(messageId);
+        this.onConfirmExpired(messageId);
+        return;
+      }
+      const seconds = Math.ceil(remaining / 1000);
+      const mm = Math.floor(seconds / 60);
+      const ss = String(seconds % 60).padStart(2, '0');
+      el.textContent = `Expires in ${mm}:${ss}`;
+    };
+
+    // Clear any timer from a previous render of the same card — renderMessages
+    // rebuilds the DOM, and an orphaned interval would keep firing at a node
+    // nobody can see.
+    const existing = this.countdownTimers.get(messageId);
+    if (existing !== undefined) window.clearInterval(existing);
+
+    tick();
+    const handle = window.setInterval(tick, 1000);
+    this.countdownTimers.set(messageId, handle);
+  }
+
+  /**
    * Render a confirmation card for one or more deferred tool_use blocks.
    * Card states drive the button enabled state and the trailing badge:
    *   - pending: both buttons active
@@ -469,6 +517,28 @@ export class WidgetUi {
       list.appendChild(this.buildToolUseRow(tu));
     }
     wrapper.appendChild(list);
+
+    // Bridge mode gives the card a deadline (§4.6). The Anthropic path does
+    // not, and then the card renders exactly as it always has — no countdown,
+    // no expiry, because those confirmations genuinely never expire.
+    if (c.expiresAt && c.state === 'pending') {
+      const countdown = document.createElement('div');
+      countdown.className = 'mindum-widget-confirm-countdown';
+      wrapper.appendChild(countdown);
+      this.startCountdown(countdown, c.expiresAt, c.messageId);
+    }
+
+    if (c.state === 'expired') {
+      const expired = document.createElement('div');
+      expired.className = 'mindum-widget-confirm-expired';
+      // The user's exact copy. It says what to do next, because "expired" on
+      // its own leaves someone staring at a dead card wondering if the work
+      // happened.
+      expired.textContent = 'This request expired — ask again to retry.';
+      wrapper.appendChild(expired);
+
+      return wrapper;
+    }
 
     if (c.state === 'pending' || c.state === 'approving' || c.state === 'rejecting') {
       const actions = document.createElement('div');
