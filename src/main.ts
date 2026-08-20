@@ -1,6 +1,6 @@
 import { postChat, ChatError } from './api/chat';
 import { postStop } from './api/stop';
-import { ConfirmError, postConfirm } from './api/confirm';
+import { ConfirmError, postConfirm, postConfirmExpire } from './api/confirm';
 import { createEchoClient, type EchoClient } from './api/echo';
 import { clearTokenCache, getToken, TokenMintError } from './api/token';
 import type {
@@ -350,7 +350,8 @@ function bootstrap(): void {
         messageId: payload.id,
         conversationId: payload.conversation_id,
         toolUses: block.tool_uses,
-        state: 'pending',
+        state: block.decision === 'timeout' ? 'expired' : 'pending',
+        expiresAt: block.expires_at,
       },
     });
     // The HTTP /api/widget/chat call is already settled by the time the
@@ -361,6 +362,30 @@ function bootstrap(): void {
     pendingAssistantResolve?.();
     ui.renderMessages(messages);
   }
+
+  // D-6C-3: the countdown reached the bridge's deadline. Mark the card
+  // locally and tell the API, which re-checks the deadline itself before
+  // acting — the browser's clock is a nudge, never the authority.
+  ui.onConfirmExpiry((messageId) => {
+    const target = messages.find(
+      (m) => m.role === 'confirmation' && m.confirmation?.messageId === messageId,
+    );
+    if (!target?.confirmation || target.confirmation.state !== 'pending') return;
+
+    target.confirmation.state = 'expired';
+    ui.renderMessages(messages);
+
+    const conversationId = target.confirmation.conversationId;
+    void (async () => {
+      const tok = await getToken({
+        tokenEndpoint: config.tokenEndpoint,
+        sessionId: config.sessionId,
+        endUserId: config.endUserId,
+        agent: config.agent,
+      });
+      await postConfirmExpire({ apiUrl: config.apiUrl, token: tok.token, conversationId });
+    })();
+  });
 
   ui.onConfirm(async (messageId, decision) => {
     const target = messages.find(

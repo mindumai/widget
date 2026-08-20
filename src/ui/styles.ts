@@ -806,6 +806,17 @@ export function buildStyles(theme: ThemeInput): string {
 .mindum-widget-confirm-reject:hover:not(:disabled) { filter: brightness(0.97); }
 .mindum-widget-confirm-approve:disabled,
 .mindum-widget-confirm-reject:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+.mindum-widget-confirm-countdown {
+  font-size: 12px;
+  color: #6B6B6B;
+  margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.mindum-widget-confirm-expired {
+  font-size: 13px;
+  color: #6B6B6B;
+  margin: 6px 0 0;
+}
 .mindum-widget-confirm-badge {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 12px; font-weight: 600;
