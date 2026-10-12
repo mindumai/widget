@@ -249,6 +249,11 @@ export function buildStyles(theme: ThemeInput): string {
   z-index: 2147483000;
   display: flex;
   flex-direction: column;
+  /* The closed panel stays laid out (opacity 0) inside this box, so the
+     root must not catch clicks itself — otherwise it shadows whatever the
+     host page has underneath (a login form, in the mindum.dev case). Only
+     the live pieces (bubble, pill bar, open panel) opt back in. */
+  pointer-events: none;
   font-family: ${bodyFont};
   color: var(--mw-ink);
   line-height: 1.5;
@@ -260,6 +265,7 @@ export function buildStyles(theme: ThemeInput): string {
 /* ---------- Launcher ---------- */
 .mindum-widget-bubble {
   position: relative;
+  pointer-events: auto;
   width: 60px; height: 60px; border-radius: 50%;
   border: none; cursor: pointer;
   background: linear-gradient(150deg, var(--mw-accent) 0%, var(--mw-accent-deep) 100%);
@@ -313,6 +319,7 @@ export function buildStyles(theme: ThemeInput): string {
 }
 .mindum-widget-root.is-pill .mindum-widget-pillbar {
   display: flex; flex-direction: column; gap: 5px;
+  pointer-events: auto;
 }
 .mindum-widget-root.is-pill .mindum-widget-form {
   margin: 0; padding: 0;
